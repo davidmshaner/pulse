@@ -35,9 +35,14 @@ def test_deploy_week_paths_exist():
     assert config.SCRIPTS.is_dir(), config.SCRIPTS
 
 
-def test_calendar_stub_empty():
-    assert config.CALENDAR_SELF_EMAILS == []
-    assert config.CALENDAR_CRED_DIRS == []
+def test_calendar_config_shape():
+    # Calendar is config-driven: a list of self-emails and (tag, cred_dir) accounts.
+    # Empty when unconfigured; populated when the user wires accounts.
+    assert isinstance(config.CALENDAR_SELF_EMAILS, list)
+    assert isinstance(config.CALENDAR_ACCOUNTS, list)
+    for tag, cred in config.CALENDAR_ACCOUNTS:
+        assert isinstance(tag, str), tag
+        assert isinstance(cred, Path), cred
 
 
 if __name__ == "__main__":
