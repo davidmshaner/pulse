@@ -4,7 +4,7 @@ An always-visible menu-bar attention-budget governor. It reads your Claude Code
 session activity (and Claude Cowork), categorizes time against your engagements,
 and answers "should I stop working on this right now?" — not "how did my week go?".
 
-macOS today (rumps menu bar); a Windows overlay is in progress.
+macOS (rumps menu bar) and Windows (always-on-top tkinter overlay).
 
 ## Setup (with Claude Code)
 Pulse sets itself up. Clone the repo, open it in Claude Code, and paste:

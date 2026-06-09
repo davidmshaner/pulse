@@ -59,9 +59,10 @@ are gitignored — they hold the user's real data and never get pushed.
 ## 7. Launch at login
 - **macOS:** `bash install-mac.sh` (registers a LaunchAgent and starts the menu
   bar app).
-- **Windows:** the overlay frontend + installer are not in this release yet — tell
-  the user the menu-bar/overlay is macOS-only for now; `snapshot.py` + config still
-  work, and the Windows overlay is coming.
+- **Windows:** run `powershell -ExecutionPolicy Bypass -File install.ps1` (registers a
+  Task Scheduler "at logon" task running the overlay with `pythonw`, and starts it now).
+  The overlay is a small always-on-top window — click it to expand the breakdown, drag to
+  move, right-click to quit.
 
 ## Done
 Tell the user Pulse is running (macOS) or configured (Windows), and that they can
