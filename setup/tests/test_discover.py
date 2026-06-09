@@ -27,6 +27,17 @@ def test_cowork_dir_for_macos_shape():
     assert p.name == "local-agent-mode-sessions", p
 
 
+def test_candidate_roots_shape_and_ranking():
+    rep = discover.report()
+    assert rep["os"] in ("macos", "windows", "linux")
+    assert "candidate_roots" in rep and isinstance(rep["candidate_roots"], list)
+    # Each candidate has a resolved path + a session_count; list is sorted desc.
+    counts = [c["session_count"] for c in rep["candidate_roots"]]
+    assert counts == sorted(counts, reverse=True), counts
+    for c in rep["candidate_roots"]:
+        assert Path(c["path"]).is_dir(), c
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

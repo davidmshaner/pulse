@@ -40,3 +40,38 @@ def decode_project_dir(encoded: str) -> Path | None:
         return None
     candidate = Path("/" + encoded[1:].replace("-", "/"))
     return candidate if candidate.is_dir() else None
+
+
+def candidate_roots(top: int = 20) -> list[dict]:
+    """Decode every project-dir to a real path, count session files per path,
+    return [{path, session_count}] ranked desc. Skips unresolvable encodings."""
+    pdir = projects_dir()
+    out = []
+    if pdir.is_dir():
+        for child in pdir.iterdir():
+            if not child.is_dir():
+                continue
+            decoded = decode_project_dir(child.name)
+            if decoded is None:
+                continue
+            n = sum(1 for _ in child.glob("*.jsonl"))
+            out.append({"path": str(decoded), "session_count": n})
+    out.sort(key=lambda c: -c["session_count"])
+    return out[:top]
+
+
+def report() -> dict:
+    os_name = detect_os()
+    cowork = cowork_dir_for(os_name)
+    return {
+        "os": os_name,
+        "projects_dir": str(projects_dir()),
+        "projects_dir_exists": projects_dir().is_dir(),
+        "cowork_dir": str(cowork),
+        "cowork_dir_exists": cowork.is_dir(),
+        "candidate_roots": candidate_roots(),
+    }
+
+
+if __name__ == "__main__":
+    print(json.dumps(report(), indent=2))
