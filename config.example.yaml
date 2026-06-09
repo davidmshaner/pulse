@@ -21,10 +21,14 @@ projects_dirs:
 # learnings:    <path to your learnings.yaml>       # default: ./learnings.yaml
 # rules:        <path to your disambiguation-rules.yaml> # default: ./disambiguation-rules.yaml
 
-# Calendar accounts — reserved (calendar wiring is a later release).
+# Calendar (optional). When accounts are listed, meeting time is counted toward
+# your engagements via Google Calendar OAuth (reusing the credential files written
+# by google_workspace_mcp). Empty accounts = sessions + Cowork only.
 calendar:
-  self_emails: []
-  credential_dirs: []
+  self_emails: []          # your own email addresses (filtered out of co-attendees)
+  accounts: []             # e.g.:
+  #   - {tag: work,     credentials_dir: .google_workspace_mcp/credentials_work}
+  #   - {tag: personal, credentials_dir: .google_workspace_mcp/credentials_personal}
 
 # Cowork session classification (optional). Maps Claude Cowork sessions to your
 # categories by slash-command, sender email, or title regex. Omit = Cowork

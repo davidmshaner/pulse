@@ -71,7 +71,9 @@ RULES = _resolve(_cfg["rules"]) if _cfg.get("rules") else WIDGET_DIR / "disambig
 
 _cal = _cfg.get("calendar") or {}
 CALENDAR_SELF_EMAILS = list(_cal.get("self_emails", []))
-CALENDAR_CRED_DIRS = [_resolve(p) for p in _cal.get("credential_dirs", [])]
+# Each account: {tag, credentials_dir}. Empty = calendar off (sessions-only).
+CALENDAR_ACCOUNTS = [(a["tag"], _resolve(a["credentials_dir"]))
+                     for a in (_cal.get("accounts") or [])]
 
 # --- Cowork classification (user-specific; empty by default) ----------------
 # How Claude Cowork sessions map to your categories. Kept OUT of code so the
