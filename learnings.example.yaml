@@ -1,0 +1,3 @@
+# Co-attendee email -> bucket-path hints (used for meeting classification, later phase).
+patterns: {}
+domain_patterns: {}

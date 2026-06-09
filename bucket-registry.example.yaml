@@ -1,0 +1,7 @@
+# Map your repo/folder roots to categories. Deepest match wins.
+exclude_paths: []
+buckets:
+  - name: ExampleClient
+    display_name: Example Client
+    source_path: /Users/CHANGEME/work/example-client
+    engagement_type: cash

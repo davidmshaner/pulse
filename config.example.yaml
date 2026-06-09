@@ -1,0 +1,40 @@
+# Pulse machine config. The setup skill generates this per machine. Relative
+# paths resolve against your home directory; absolute paths are used as-is.
+# Repo-internal inputs (timecore, registry, learnings, rules) auto-default to
+# this repo's own files, so a fresh clone runs standalone with no edits here.
+
+timezone: America/New_York
+
+# Claude Code session sources (JSONL).
+projects_dirs:
+  - .claude/projects
+
+# Claude Cowork (local agent mode) sessions. Omit for the OS-aware default
+# (macOS: ~/Library/Application Support/Claude/local-agent-mode-sessions).
+# cowork_root: Library/Application Support/Claude/local-agent-mode-sessions
+
+# --- Advanced overrides (optional) ---------------------------------------
+# By default these resolve to the vendored copies / repo-local files in THIS
+# clone, regardless of where you cloned it. Set them only to point elsewhere.
+# timecore_dir: <path to a timecore checkout>      # default: ./timecore (vendored)
+# registry:     <path to your bucket-registry.yaml> # default: ./bucket-registry.yaml
+# learnings:    <path to your learnings.yaml>       # default: ./learnings.yaml
+# rules:        <path to your disambiguation-rules.yaml> # default: ./disambiguation-rules.yaml
+
+# Calendar accounts — reserved (calendar wiring is a later release).
+calendar:
+  self_emails: []
+  credential_dirs: []
+
+# Cowork session classification (optional). Maps Claude Cowork sessions to your
+# categories by slash-command, sender email, or title regex. Omit = Cowork
+# sessions that can't be classified are skipped. Example:
+# cowork_classification:
+#   slash_bucket:
+#     my-client-slug: [ClientA]
+#   email_default:
+#     you@example.com: [ClientA]
+#   title_patterns:
+#     - {pattern: "weekly sync", bucket: [ClientA]}
+#   cron_templates:
+#     - "^<scheduled-task"       # generic Claude scheduled-task marker

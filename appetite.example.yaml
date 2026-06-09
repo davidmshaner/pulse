@@ -1,0 +1,19 @@
+# Per-category time budget. Hours are the base unit; rate fields are optional
+# (when present, the cap is derived: weekly_cap = monthly_value / target_rate / 4.33).
+
+# Overall billable capacity (summed across the categories below).
+total_budget:
+  weekly_hours:  32
+  monthly_hours: 128
+
+engagements:
+  ClientA:
+    weekly_hours: 8            # plain hour budget — the simplest model
+
+  ClientB:
+    weekly_hours: 6
+
+  RetainerClient:
+    # Optional rate mode: enter $/mo + your target $/hr instead of hours.
+    monthly_value: 5000        # $/mo flowing from this engagement
+    target_rate:   250         # $/hr you want to hit -> derives the cap

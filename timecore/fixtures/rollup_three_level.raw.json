@@ -1,0 +1,8 @@
+{
+  "func": "rollup_fractional",
+  "leaf_fractional": {
+    "Acme.Alpha": 45.0,
+    "Acme.Beta": 75.0,
+    "Acme.Group.Child": 30.0
+  }
+}

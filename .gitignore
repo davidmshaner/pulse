@@ -1,0 +1,10 @@
+config.yaml
+bucket-registry.yaml
+learnings.yaml
+disambiguation-rules.yaml
+state.json
+state.json.tmp
+.cache/
+__pycache__/
+*.pyc
+appetite.yaml

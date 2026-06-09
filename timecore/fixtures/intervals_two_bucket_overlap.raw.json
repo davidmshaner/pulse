@@ -1,0 +1,7 @@
+{
+  "func": "even_split_fractional",
+  "per_bucket_intervals": {
+    "Acme.Alpha": [["2026-05-01T09:00:00", "2026-05-01T10:00:00"]],
+    "Acme.Beta": [["2026-05-01T09:30:00", "2026-05-01T10:30:00"]]
+  }
+}
