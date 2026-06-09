@@ -42,20 +42,49 @@ def decode_project_dir(encoded: str) -> Path | None:
     return candidate if candidate.is_dir() else None
 
 
+def _cwd_from_session(jsonl_path: Path) -> str | None:
+    """Read the working directory recorded inside a session JSONL. The first
+    entries can be queue/summary lines without a cwd, so scan a few lines until
+    one carries it. Robust where the dir-name decode is not (Claude Code maps
+    '/', '_', and '.' all to '-' in the dir name, which is irreversible)."""
+    try:
+        with open(jsonl_path) as f:
+            for i, line in enumerate(f):
+                if i > 200:
+                    break
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                except Exception:
+                    continue
+                cwd = obj.get("cwd")
+                if cwd:
+                    return cwd
+    except OSError:
+        return None
+    return None
+
+
 def candidate_roots(top: int = 20) -> list[dict]:
-    """Decode every project-dir to a real path, count session files per path,
-    return [{path, session_count}] ranked desc. Skips unresolvable encodings."""
+    """For each project dir, read the recorded cwd from a session and count
+    sessions per cwd, ranked desc. Dedupes the multiple lossy-encoded dir-name
+    variants of the same path into one real root."""
     pdir = projects_dir()
-    out = []
+    counts: dict[str, int] = {}
     if pdir.is_dir():
         for child in pdir.iterdir():
             if not child.is_dir():
                 continue
-            decoded = decode_project_dir(child.name)
-            if decoded is None:
+            jsonls = list(child.glob("*.jsonl"))
+            if not jsonls:
                 continue
-            n = sum(1 for _ in child.glob("*.jsonl"))
-            out.append({"path": str(decoded), "session_count": n})
+            cwd = _cwd_from_session(jsonls[0])
+            if not cwd or not Path(cwd).is_dir():
+                continue
+            counts[cwd] = counts.get(cwd, 0) + len(jsonls)
+    out = [{"path": p, "session_count": n} for p, n in counts.items()]
     out.sort(key=lambda c: -c["session_count"])
     return out[:top]
 
