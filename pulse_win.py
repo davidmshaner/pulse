@@ -64,6 +64,12 @@ class PulseOverlay:
             self._run_snapshot()
             self._state = fc.load_state(WIDGET_DIR)
         self._repaint()
+        # macOS: borderless (overrideredirect) windows need an explicit map/lift
+        # to appear; harmless on Windows.
+        self.root.update_idletasks()
+        self.root.deiconify()
+        self.root.lift()
+        self.root.attributes("-topmost", True)
         self.root.after(LIVE_BUCKET_MS, self._tick_live)
         self.root.after(SNAPSHOT_MS, self._tick_snapshot)
         self.root.after(POLL_MS, self._tick_poll)
