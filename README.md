@@ -6,10 +6,15 @@ and answers "should I stop working on this right now?" — not "how did my week 
 
 macOS today (rumps menu bar); a Windows overlay is in progress.
 
-## Setup
-Pulse is designed to be set up by Claude Code. Open this repo in Claude Code and
-run the setup (a guided setup skill ships in the next release). Until then, manual:
+## Setup (with Claude Code)
+Pulse sets itself up. Clone the repo, open it in Claude Code, and paste:
 
+> Read `setup/SKILL.md` and set up Pulse for me.
+
+Claude Code discovers your machine's paths, asks you to name your categories and
+budgets, writes your config, installs, and starts the menu bar app (macOS).
+
+### Manual setup (without Claude Code)
 1. `pip3 install rumps pyyaml`
 2. `cp config.example.yaml config.yaml` and edit the machine values (timezone, projects_dirs).
 3. `cp bucket-registry.example.yaml bucket-registry.yaml` and map your repo roots to categories.
