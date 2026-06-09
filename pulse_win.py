@@ -43,6 +43,7 @@ class PulseOverlay:
         self.root.title("Pulse")
         self.root.attributes("-topmost", True)  # always on top
         self.root.configure(bg=BG)
+        self.root.resizable(False, False)
         self.expanded = False
         self._snapshot_lock = threading.Lock()
         self._needs_repaint = False
@@ -65,15 +66,13 @@ class PulseOverlay:
             self._run_snapshot()
             self._state = fc.load_state(WIDGET_DIR)
         self._repaint()
-        # Map the window FIRST, then make it borderless. macOS will not display an
-        # overrideredirect window that was made borderless before its first map;
-        # setting it after the initial update + forcing focus is the reliable order.
-        self.root.update_idletasks()
+        # Borderless overlay on Windows (overrideredirect works there). On macOS the
+        # same call leaves the window empty/broken, so keep the normal title bar.
+        if sys.platform.startswith("win"):
+            self.root.overrideredirect(True)
         self.root.geometry("+60+60")
-        self.root.overrideredirect(True)
-        self.root.update()
+        self.root.update_idletasks()
         self.root.lift()
-        self.root.focus_force()
         self.root.after(LIVE_BUCKET_MS, self._tick_live)
         self.root.after(SNAPSHOT_MS, self._tick_snapshot)
         self.root.after(POLL_MS, self._tick_poll)
@@ -151,4 +150,19 @@ class PulseOverlay:
 
 
 if __name__ == "__main__":
-    PulseOverlay().run()
+    if "--selftest" in sys.argv:
+        o = PulseOverlay()
+
+        def _check():
+            try:
+                print("MAINLOOP text:", repr(o.headline.cget("text")),
+                      "mapped:", bool(o.headline.winfo_ismapped()),
+                      "geom:", o.root.winfo_geometry())
+            except Exception as e:
+                print("MAINLOOP LABEL GONE:", type(e).__name__, e)
+            o.root.destroy()
+
+        o.root.after(1500, _check)
+        o.root.mainloop()
+    else:
+        PulseOverlay().run()
