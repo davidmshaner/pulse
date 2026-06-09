@@ -32,26 +32,27 @@ BG = "#111111"
 BG2 = "#1c1c1c"
 FG = "#eeeeee"
 FG2 = "#cccccc"
+MONO = ("Menlo" if sys.platform == "darwin"
+        else "Consolas" if sys.platform.startswith("win")
+        else "DejaVu Sans Mono")
 
 
 class PulseOverlay:
     def __init__(self) -> None:
         self.root = tk.Tk()
         self.root.title("Pulse")
-        self.root.overrideredirect(True)        # borderless
         self.root.attributes("-topmost", True)  # always on top
         self.root.configure(bg=BG)
-        self.root.geometry("+60+60")
         self.expanded = False
         self._snapshot_lock = threading.Lock()
         self._needs_repaint = False
         self._drag = (0, 0)
 
-        self.headline = tk.Label(self.root, font=("Consolas", 13), fg=FG, bg=BG,
+        self.headline = tk.Label(self.root, font=(MONO, 13), fg=FG, bg=BG,
                                  padx=12, pady=5, cursor="hand2")
         self.headline.pack(fill="x")
         self.detail = tk.Label(self.root, justify="left", anchor="w",
-                               font=("Consolas", 11), fg=FG2, bg=BG2, padx=12, pady=8)
+                               font=(MONO, 11), fg=FG2, bg=BG2, padx=12, pady=8)
 
         self.headline.bind("<ButtonPress-1>", self._press)
         self.headline.bind("<B1-Motion>", self._drag_move)
@@ -64,12 +65,15 @@ class PulseOverlay:
             self._run_snapshot()
             self._state = fc.load_state(WIDGET_DIR)
         self._repaint()
-        # macOS: borderless (overrideredirect) windows need an explicit map/lift
-        # to appear; harmless on Windows.
+        # Map the window FIRST, then make it borderless. macOS will not display an
+        # overrideredirect window that was made borderless before its first map;
+        # setting it after the initial update + forcing focus is the reliable order.
         self.root.update_idletasks()
-        self.root.deiconify()
+        self.root.geometry("+60+60")
+        self.root.overrideredirect(True)
+        self.root.update()
         self.root.lift()
-        self.root.attributes("-topmost", True)
+        self.root.focus_force()
         self.root.after(LIVE_BUCKET_MS, self._tick_live)
         self.root.after(SNAPSHOT_MS, self._tick_snapshot)
         self.root.after(POLL_MS, self._tick_poll)
