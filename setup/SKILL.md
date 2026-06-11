@@ -67,3 +67,9 @@ are gitignored — they hold the user's real data and never get pushed.
 ## Done
 Tell the user Pulse is running (macOS) or configured (Windows), and that they can
 re-run `python3 snapshot.py` any time, or edit `appetite.yaml` to adjust budgets.
+
+**Tell them explicitly: meetings are NOT counted yet.** Pulse currently tracks
+Claude Code sessions + Cowork only. To also count calendar time, they can add a
+`calendar` block to `config.yaml` later (Google Calendar via OAuth — see
+`config.example.yaml`). It's off by default and needs their own credentials, so
+don't set it up in this session unless they ask.
