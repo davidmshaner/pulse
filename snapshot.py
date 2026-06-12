@@ -248,6 +248,50 @@ def per_path_minutes(
     return _compose_per_path_minutes(per_bucket, meetings, start, end, LOCAL_TZ)
 
 
+def meeting_path_minutes(
+    meetings: list[dict],
+    start: datetime,
+    end: datetime,
+) -> dict[str, float]:
+    """Returns {dotted_bucket_path: minutes} counting ONLY meetings in the window.
+    Same even-split + rollup as the combined calc, so the breakout is consistent."""
+    per_bucket = _meeting_intervals_per_bucket(meetings, start, end, LOCAL_TZ)
+    leaf_frac = even_split_fractional(per_bucket)
+    rolled = rollup_fractional(leaf_frac)
+    return {".".join(bp): mins for bp, mins in rolled.items()}
+
+
+def meetings_in_window(meetings: list[dict], start: datetime, end: datetime) -> int:
+    """Count resolved meetings whose start falls in [start, end)."""
+    n = 0
+    for m in meetings:
+        try:
+            s = datetime.fromisoformat(m["start"])
+        except (KeyError, ValueError):
+            continue
+        s = s.replace(tzinfo=LOCAL_TZ) if s.tzinfo is None else s.astimezone(LOCAL_TZ)
+        if start <= s < end:
+            n += 1
+    return n
+
+
+def build_people(learnings: dict) -> list[dict]:
+    """Surface the learned co-attendee map: person -> project. Display name is
+    derived from the email local-part (the registry keys on email). Self-emails
+    (you) are skipped — you are not a 'person who maps to a project'."""
+    self_emails = set(config.CALENDAR_SELF_EMAILS)
+    out = []
+    for email, bucket in (learnings.get("patterns") or {}).items():
+        if email in self_emails:
+            continue
+        local = str(email).split("@")[0]
+        name = local.replace(".", " ").replace("_", " ").title()
+        leaf = bucket[-1] if isinstance(bucket, list) and bucket else str(bucket)
+        out.append({"name": name, "project": leaf})
+    out.sort(key=lambda p: (p["project"], p["name"]))
+    return out
+
+
 def find_hours(rolled: dict[str, float], leaf_name: str) -> float:
     """Match by last path segment so a leaf name finds its full dotted path (e.g. 'Alpha' -> 'Acme.Alpha')."""
     for path_str, mins in rolled.items():
@@ -324,6 +368,9 @@ def main() -> None:
     for name, (ws, we) in wins.items():
         by_window[name] = per_path_minutes(all_sessions, meetings, ws, we)
 
+    # Meeting-only minutes for the week, so the panel can break out meetings vs sessions.
+    meeting_wtd = meeting_path_minutes(meetings, *wins["wtd"])
+
     appetite = load_appetite()
     engagement_state: dict[str, dict] = {}
     for name, cfg in appetite.items():
@@ -338,6 +385,7 @@ def main() -> None:
             "weekly_cap_h":   round(weekly_cap,  2),
             "monthly_cap_h":  round(monthly_cap, 2),
             "today_h":        round(h_today, 2),
+            "meeting_h":      round(find_hours(meeting_wtd, name), 2),
             "wtd": {"actual_h": round(h_wtd, 2), **remaining_or_over(h_wtd, weekly_cap)},
             "7d":  {"actual_h": round(h_7d,  2), **remaining_or_over(h_7d,  weekly_cap)},
             "30d": {"actual_h": round(h_30d, 2), **remaining_or_over(h_30d, monthly_cap)},
@@ -381,6 +429,8 @@ def main() -> None:
             "soft_resolved": sum(1 for m in meetings if m.get("reason") == "soft_resolved_unambig_co_attendee"),
             "still_unresolved": still_unresolved_meetings,
         },
+        "meetings_wtd": meetings_in_window(meetings, *wins["wtd"]),
+        "people": build_people(learnings),
         "last_deploy_week_run": last_dw,
     }
 

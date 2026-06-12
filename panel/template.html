@@ -19,7 +19,8 @@
   .head{display:flex;justify-content:space-between;align-items:baseline;
     border-bottom:1px solid var(--sage);padding-bottom:10px;margin-bottom:12px;}
   .head .verdict{font-size:13px;font-weight:600;letter-spacing:-0.2px;}
-  .head .gen{font-size:10px;color:var(--muted);letter-spacing:0.5px;}
+  .head .toggle{font-size:11px;font-weight:500;color:var(--sage);cursor:pointer;letter-spacing:0.3px;}
+  .head .toggle:hover{color:var(--ink);}
   .row{margin:10px 0;}
   .row .top{display:flex;justify-content:space-between;font-size:12px;font-weight:500;}
   .row .name{letter-spacing:0.3px;}
@@ -29,24 +30,41 @@
   .s-under > i{background:var(--sage);} .s-near > i{background:var(--amber);}
   .s-over  > i{background:var(--clay);}
   .row .sub{display:flex;gap:14px;font-size:10px;color:var(--muted);letter-spacing:0.3px;}
+  .row .sub .mtg{color:var(--sage);}
   .now{margin-top:12px;padding-top:10px;border-top:1px solid #E7E3DD;
     font-size:11px;color:var(--ink);display:flex;justify-content:space-between;}
   .now .dot{color:var(--sage);}
   .foot{margin-top:8px;font-size:10px;color:var(--muted);}
+  .foot .mtgcount{color:var(--ink);font-weight:500;}
   .total{background:#EFEBE5;border-radius:6px;padding:10px 12px;margin-bottom:6px;}
+  .pgroup{margin:11px 0;}
+  .pproj{font-size:12px;font-weight:600;letter-spacing:0.3px;}
+  .pnames{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.55;}
+  .phint{margin-top:12px;padding-top:10px;border-top:1px solid #E7E3DD;
+    font-size:10px;color:var(--muted);}
 </style>
 </head>
 <body>
 <div id="app"></div>
 <script>
+var VM = null, VIEW = 'time';
+
 function bar(pct, status){
   var w = Math.min(100, pct);
   return '<div class="bar s-'+status+'"><i style="width:'+w+'%"></i></div>';
 }
 function fig(h){ return (h===null||h===undefined)?'–':h.toFixed(1)+'h'; }
+
+function headHTML(title, toggleView, toggleLabel){
+  return '<div class="head"><span class="verdict">'+title+'</span>'
+    + '<span class="toggle" onclick="setView(\''+toggleView+'\')">'+toggleLabel+'</span></div>';
+}
+
 function rowHTML(e, isTotal){
   var verdict = e.status==='over' ? (e.pct-100)+'% over'
               : (e.cap_h - e.actual_h).toFixed(1)+'h left';
+  var mtg = (e.meeting_h && e.meeting_h > 0)
+          ? '<span class="mtg">mtg '+fig(e.meeting_h)+'</span>' : '';
   return '<div class="row'+(isTotal?' total':'')+'">'
     + '<div class="top"><span class="name">'+e.name+'</span>'
     + '<span class="figs">'+fig(e.actual_h)+' / '+fig(e.cap_h)+' wk</span></div>'
@@ -54,22 +72,50 @@ function rowHTML(e, isTotal){
     + '<div class="sub"><span>'+verdict+'</span>'
     + '<span>today '+fig(e.today_h)+'</span>'
     + '<span>7d '+fig(e.d7_h)+'</span>'
-    + '<span>30d '+fig(e.d30_actual)+'/'+fig(e.d30_cap)+'</span></div></div>';
+    + mtg + '</div></div>';
 }
-function renderPulse(vm){
-  if(!vm){ document.getElementById('app').textContent='No data yet.'; return; }
-  var over = vm.engagements.filter(function(e){return e.status==='over';}).length;
-  var verdict = over ? over+' over budget' : 'all within budget';
-  var html = '<div class="head"><span class="verdict">'+verdict+'</span>'
-    + '<span class="gen">'+(vm.generated_at||'').slice(11,16)+'</span></div>';
-  if(vm.total){ var t=Object.assign({name:'Billable'}, vm.total); html += rowHTML(t, true); }
-  vm.engagements.forEach(function(e){ html += rowHTML(e, false); });
-  if(vm.now){ html += '<div class="now"><span><span class="dot">●</span> now: '
-    + vm.now.label+'</span><span>~'+vm.now.elapsed_min+' min</span></div>'; }
-  if(vm.uncategorized){ html += '<div class="foot">uncategorized: '
-    + vm.uncategorized.sessions+' sessions, '+vm.uncategorized.meetings+' meetings</div>'; }
+
+function renderTime(){
+  var over = VM.engagements.filter(function(e){return e.status==='over';}).length;
+  var title = over ? over+' over budget' : 'all within budget';
+  var html = headHTML(title, 'people', 'people ›');
+  if(VM.total){ var t=Object.assign({name:'Billable'}, VM.total); html += rowHTML(t, true); }
+  VM.engagements.forEach(function(e){ html += rowHTML(e, false); });
+  if(VM.now){ html += '<div class="now"><span><span class="dot">●</span> now: '
+    + VM.now.label+'</span><span>~'+VM.now.elapsed_min+' min</span></div>'; }
+  var foot = '';
+  if(VM.meetings_wtd){ foot += '<div class="foot"><span class="mtgcount">'
+    + VM.meetings_wtd+' meetings</span> counted this week</div>'; }
+  if(VM.uncategorized){ foot += '<div class="foot">uncategorized: '
+    + VM.uncategorized.sessions+' sessions, '+VM.uncategorized.meetings+' meetings</div>'; }
+  document.getElementById('app').innerHTML = html + foot;
+}
+
+function renderPeople(){
+  var html = headHTML('People → project', 'time', '‹ back');
+  var people = VM.people || [];
+  if(!people.length){
+    html += '<div class="phint">No people learned yet. Pulse fills this in as it '
+      + 'sees who you meet with and which project the work lands in.</div>';
+    document.getElementById('app').innerHTML = html; return;
+  }
+  var byProj = {};
+  people.forEach(function(p){ (byProj[p.project]=byProj[p.project]||[]).push(p.name); });
+  Object.keys(byProj).forEach(function(proj){
+    html += '<div class="pgroup"><div class="pproj">'+proj+'</div>'
+      + '<div class="pnames">'+byProj[proj].join(', ')+'</div></div>';
+  });
+  html += '<div class="phint">A meeting with any of these bills to its project automatically.</div>';
   document.getElementById('app').innerHTML = html;
 }
+
+function paint(){
+  if(!VM){ document.getElementById('app').textContent='No data yet.'; return; }
+  if(VIEW==='people'){ renderPeople(); } else { renderTime(); }
+}
+function setView(v){ VIEW = v; paint(); }
+function renderPulse(vm){ VM = vm; paint(); }
+
 window.__PULSE_VM__ = /*__PULSE_VM__*/ null;
 renderPulse(window.__PULSE_VM__);
 </script>

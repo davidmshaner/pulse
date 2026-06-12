@@ -33,6 +33,7 @@ def _engagement(name: str, e: dict) -> dict:
                  e["30d"]["actual_h"], e["monthly_cap_h"])
     blk["name"] = name
     blk["d7_h"] = round(e["7d"]["actual_h"], 1)
+    blk["meeting_h"] = round(e.get("meeting_h", 0) or 0, 1)
     return blk
 
 
@@ -60,4 +61,6 @@ def build_view_model(state: dict) -> dict:
         "engagements": engagements,
         "now": now,
         "uncategorized": state.get("needs_llm", {"sessions": 0, "meetings": 0}),
+        "meetings_wtd": state.get("meetings_wtd", 0),
+        "people": state.get("people", []),
     }

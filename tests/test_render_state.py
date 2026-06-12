@@ -12,6 +12,7 @@ STATE = {
     },
     "engagements": {
         "Acme": {"weekly_cap_h": 12.8, "monthly_cap_h": 56.0, "today_h": 2.4,
+                 "meeting_h": 3.2,
                  "wtd": {"actual_h": 24.5, "hours_over": 11.7, "over": True},
                  "7d":  {"actual_h": 26.0, "hours_over": 13.2, "over": True},
                  "30d": {"actual_h": 94.0, "hours_over": 38.0, "over": True}},
@@ -22,6 +23,8 @@ STATE = {
     },
     "live_bucket": {"bucket_path": ["Consulting", "Acme"], "elapsed_min": 4},
     "needs_llm": {"sessions": 3, "meetings": 11},
+    "meetings_wtd": 6,
+    "people": [{"name": "Dana", "project": "Acme"}, {"name": "Wei", "project": "Globex"}],
 }
 
 def test_total_block_normalized():
@@ -57,3 +60,16 @@ def test_now_footer_absent_when_no_live_bucket():
 def test_uncategorized_passthrough():
     vm = build_view_model(STATE)
     assert vm["uncategorized"] == {"sessions": 3, "meetings": 11}
+
+def test_meeting_hours_surfaced_per_engagement():
+    vm = build_view_model(STATE)
+    acme = [e for e in vm["engagements"] if e["name"] == "Acme"][0]
+    assert acme["meeting_h"] == 3.2
+    globex = [e for e in vm["engagements"] if e["name"] == "Globex"][0]
+    assert globex["meeting_h"] == 0.0          # missing meeting_h defaults to 0
+
+def test_people_and_meeting_count_passthrough():
+    vm = build_view_model(STATE)
+    assert vm["meetings_wtd"] == 6
+    assert vm["people"] == [{"name": "Dana", "project": "Acme"},
+                            {"name": "Wei", "project": "Globex"}]
