@@ -8,3 +8,6 @@ state.json.tmp
 __pycache__/
 *.pyc
 appetite.yaml
+docs/
+_rendered.html
+panel/_rendered.html

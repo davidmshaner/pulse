@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+"""panel_app.py — Pulse menu-bar app with a designed popover (WKWebView).
+
+Backend unchanged: shells out to snapshot.py (same as pulse.py did), reads
+state.json, renders the brand card, shows it in a transient popover.
+
+Run: /usr/bin/python3 panel_app.py
+"""
+from __future__ import annotations
+
+import json
+import subprocess
+import threading
+from pathlib import Path
+
+import AppKit
+import WebKit
+import objc
+from Foundation import NSObject, NSMakeRect, NSMakeSize, NSURL, NSTimer
+
+WIDGET_DIR = Path(__file__).resolve().parent
+SNAPSHOT_SCRIPT = WIDGET_DIR / "snapshot.py"
+STATE = WIDGET_DIR / "state.json"
+
+import sys
+sys.path.insert(0, str(WIDGET_DIR))
+from panel.render_state import build_view_model       # noqa: E402
+from panel.render_html import write_rendered, RENDERED_PATH  # noqa: E402
+import frontend_common as fc                           # noqa: E402
+from live_bucket import detect as detect_live_bucket   # noqa: E402
+
+SNAPSHOT_INTERVAL = 600.0   # seconds
+LIVE_INTERVAL = 60.0        # seconds — repaint title glyph
+
+
+def _load_state() -> dict | None:
+    try:
+        with open(STATE) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+
+class AppDelegate(NSObject):
+    def applicationDidFinishLaunching_(self, _notification):
+        self._lock = threading.Lock()
+        self.statusitem = AppKit.NSStatusBar.systemStatusBar().statusItemWithLength_(
+            AppKit.NSVariableStatusItemLength)
+        btn = self.statusitem.button()
+        btn.setTarget_(self)
+        btn.setAction_(objc.selector(self.toggle_, signature=b"v@:@"))
+
+        self.webview = WebKit.WKWebView.alloc().initWithFrame_(NSMakeRect(0, 0, 360, 460))
+        vc = AppKit.NSViewController.alloc().init()
+        vc.setView_(self.webview)
+        self.popover = AppKit.NSPopover.alloc().init()
+        self.popover.setContentSize_(NSMakeSize(360, 460))
+        self.popover.setContentViewController_(vc)
+        self.popover.setBehavior_(AppKit.NSPopoverBehaviorTransient)
+
+        # First paint: if no state, run snapshot synchronously once.
+        if _load_state() is None:
+            self._run_snapshot()
+        self._repaint()
+
+        NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+            LIVE_INTERVAL, self, objc.selector(self.tickLive_, signature=b"v@:@"), None, True)
+        NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+            SNAPSHOT_INTERVAL, self, objc.selector(self.tickSnapshot_, signature=b"v@:@"), None, True)
+
+    # --- painting ---------------------------------------------------------
+    def _repaint(self):
+        state = _load_state()
+        if state is not None:
+            state["live_bucket"] = detect_live_bucket()
+        self.statusitem.button().setTitle_(fc.title_for(state))
+        if state is not None:
+            write_rendered(build_view_model(state))
+        self.webview.loadFileURL_allowingReadAccessToURL_(
+            NSURL.fileURLWithPath_(str(RENDERED_PATH)),
+            NSURL.fileURLWithPath_(str(WIDGET_DIR / "panel")))
+
+    # --- snapshot ---------------------------------------------------------
+    def _run_snapshot(self) -> None:
+        try:
+            subprocess.run(["/usr/bin/python3", str(SNAPSHOT_SCRIPT)],
+                           check=True, capture_output=True, timeout=120)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            pass
+
+    def _snapshot_async(self):
+        if not self._lock.acquire(blocking=False):
+            return
+
+        def worker():
+            try:
+                self._run_snapshot()
+            finally:
+                self._lock.release()
+                # repaint must happen on the main thread
+                AppKit.NSOperationQueue.mainQueue().addOperationWithBlock_(self._repaint)
+        threading.Thread(target=worker, daemon=True).start()
+
+    # --- timers / actions -------------------------------------------------
+    def tickLive_(self, _timer):
+        state = _load_state()
+        if state is not None:
+            state["live_bucket"] = detect_live_bucket()
+        self.statusitem.button().setTitle_(fc.title_for(state))
+
+    def tickSnapshot_(self, _timer):
+        self._snapshot_async()
+
+    def toggle_(self, sender):
+        if self.popover.isShown():
+            self.popover.performClose_(sender)
+        else:
+            self._repaint()
+            self.popover.showRelativeToRect_ofView_preferredEdge_(
+                sender.bounds(), sender, AppKit.NSRectEdgeMinY)
+
+
+def main():
+    app = AppKit.NSApplication.sharedApplication()
+    app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyAccessory)
+    delegate = AppDelegate.alloc().init()
+    app.setDelegate_(delegate)
+    app.run()
+
+
+if __name__ == "__main__":
+    main()

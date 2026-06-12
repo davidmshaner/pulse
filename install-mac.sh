@@ -4,6 +4,8 @@ set -euo pipefail
 REPO="$(cd "$(dirname "$0")" && pwd)"
 PLIST="$HOME/Library/LaunchAgents/com.pulse.menubar.plist"
 mkdir -p "$REPO/.cache"
+# Ensure runtime deps (WebKit powers the designed popover panel).
+/usr/bin/python3 -m pip install --user --quiet rumps pyyaml "pyobjc-framework-WebKit==11.1" || true
 cat > "$PLIST" <<PLISTEOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -11,7 +13,7 @@ cat > "$PLIST" <<PLISTEOF
 <dict>
   <key>Label</key><string>com.pulse.menubar</string>
   <key>ProgramArguments</key>
-  <array><string>/usr/bin/python3</string><string>-u</string><string>$REPO/pulse.py</string></array>
+  <array><string>/usr/bin/python3</string><string>-u</string><string>$REPO/panel_app.py</string></array>
   <key>WorkingDirectory</key><string>$REPO</string>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>

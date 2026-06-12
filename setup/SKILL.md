@@ -51,7 +51,8 @@ them), and `cowork_root` only if discovery found a non-default location. Leave
 are gitignored — they hold the user's real data and never get pushed.
 
 ## 6. Install deps + verify
-- `pip3 install rumps pyyaml` (macOS) or `pip install pyyaml` (Windows).
+- `pip3 install rumps pyyaml pyobjc-framework-WebKit` (macOS — WebKit powers the
+  designed popover panel) or `pip install pyyaml` (Windows).
 - Run `python3 snapshot.py`. Show the user the per-engagement summary it prints.
   Confirm the categories + hours look right. If a category is missing or
   mis-bucketed, revisit step 2's registry mapping and re-run.
