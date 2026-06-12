@@ -137,21 +137,47 @@ def run_prematch(sessions_path: Path, meetings_path: Path) -> dict:
 # --- meeting resolution ----------------------------------------------------
 
 def soft_resolve_meeting(m: dict, learnings: dict) -> list[str] | None:
-    """Try to resolve a needs_llm meeting deterministically: if any co-attendee
-    is in learnings.patterns (single-bucket, unambiguous), use that bucket.
+    """Resolve a needs_llm meeting deterministically using everything the registry
+    already knows, in priority order:
 
-    Conservative — only resolves when there's a single unambiguous candidate.
-    If multiple co-attendees resolve to different buckets, leave unresolved
-    (the LLM step in /deploy-week will handle it).
+      1. title_rules   — a curated keyword in the title wins outright
+                         (e.g. 'Podcast Recording' -> [SC, Redacted]).
+      2. patterns      — an exact co-attendee email -> bucket.
+      3. domain_patterns — a co-attendee's email domain -> bucket (fallback).
+      4. tie-break     — if candidates are nested (one extends the others), the
+                         deepest path wins (e.g. [SC,GI] vs [SC,GI,Lee] -> Lee).
+
+    Still conservative: genuinely conflicting candidates (not nested) stay
+    unresolved, so the user (or /deploy-week's LLM) decides.
     """
+    title = (m.get("title") or "").lower()
+    for kw, bucket in (learnings.get("title_rules") or {}).items():
+        if str(kw).lower() in title:
+            return list(bucket)
+
     co = m.get("co_attendees", [])
     patterns = learnings.get("patterns", {})
+    domains = learnings.get("domain_patterns", {})
+    multi = learnings.get("multi_bucket_attendees", {})
     candidates: set[tuple[str, ...]] = set()
     for email in co:
+        if email in multi:
+            continue  # explicitly ambiguous (resolved by title rules, not their vote)
         if email in patterns:
             candidates.add(tuple(patterns[email]))
+        else:
+            dom = email.split("@")[-1].lower()
+            if dom in domains:
+                candidates.add(tuple(domains[dom]))
+
     if len(candidates) == 1:
         return list(next(iter(candidates)))
+    if len(candidates) > 1:
+        # nested tie-break: pick the deepest path iff every other candidate is a
+        # prefix of it (same engagement, more specific). Otherwise truly ambiguous.
+        longest = max(candidates, key=len)
+        if all(longest[:len(c)] == c for c in candidates):
+            return list(longest)
     return None
 
 

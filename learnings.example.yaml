@@ -1,3 +1,26 @@
-# Co-attendee email -> bucket-path hints (used for meeting classification, later phase).
+# How Pulse classifies meetings, in priority order. All sections optional.
+#
+# 1. title_rules: a keyword in the meeting title wins outright. Best for recurring
+#    blocks whose attendees are ambiguous (a solo "Podcast Recording", a generic
+#    "1:1"). Keyword match is case-insensitive substring.
+title_rules: {}
+#   podcast recording: [SC, Redacted]
+#   get offline: [Offline]
+#
+# 2. patterns: an exact co-attendee email -> bucket path.
 patterns: {}
+#   someone@clientco.com: [SC, ClientCo]
+#
+# 3. domain_patterns: a co-attendee's email domain -> bucket path (fallback when
+#    the exact email isn't known). Resolves new people at a known company.
 domain_patterns: {}
+#   clientco.com: [SC, ClientCo]
+#
+# 4. multi_bucket_attendees: people who genuinely span projects (e.g. a partner).
+#    They are NOT used as a vote — their meetings resolve via title_rules instead,
+#    so their domain doesn't wrongly pull a meeting to one project.
+multi_bucket_attendees: {}
+#   partner@yourco.com: [[Offline], [SC, SomeClient]]
+#
+# When co-attendees map to nested paths ([SC,GI] and [SC,GI,Lee]), the deepest
+# (most specific) path wins. Genuinely conflicting paths stay uncategorized.
