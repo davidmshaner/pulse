@@ -9,7 +9,10 @@ Pulse could not confidently assign some sessions and meetings to a project. Your
 is to look at what they were, decide which project each belongs to, teach Pulse's
 categorization files so the same items resolve automatically next time, and re-run.
 
-Work in the `pulse` repo root.
+Work in the `pulse` repo root — the parent of the `setup/` folder that contains this
+file. The paste command names the absolute path (e.g. `In /path/to/pulse, read
+setup/RESOLVE.md ...`); if your current working directory is elsewhere, `cd` into that
+pulse repo first. Every path below is relative to it.
 
 ## 1. Read what's unresolved
 

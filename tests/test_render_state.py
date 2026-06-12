@@ -26,6 +26,7 @@ STATE = {
     "meetings_wtd": 6,
     "people": [{"name": "Dana", "project": "Acme"}, {"name": "Wei", "project": "Globex"}],
     "uncategorized_detail": {"sessions": ["api.py"], "meetings": ["Acme sync"]},
+    "repo_path": "/Users/x/dev/pulse",
 }
 
 def test_total_block_normalized():
@@ -74,6 +75,10 @@ def test_people_and_meeting_count_passthrough():
     assert vm["meetings_wtd"] == 6
     assert vm["people"] == [{"name": "Dana", "project": "Acme"},
                             {"name": "Wei", "project": "Globex"}]
+
+def test_repo_path_passthrough():
+    assert build_view_model(STATE)["repo_path"] == "/Users/x/dev/pulse"
+    assert build_view_model({})["repo_path"] == ""
 
 def test_uncategorized_detail_passthrough_and_default():
     vm = build_view_model(STATE)

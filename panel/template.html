@@ -59,7 +59,10 @@
 <div id="app"></div>
 <script>
 var VM = null, VIEW = 'time';
-var RESOLVE_PROMPT = 'Read setup/RESOLVE.md and resolve my uncategorized Pulse items.';
+function resolvePrompt(){
+  var where = (VM && VM.repo_path) ? VM.repo_path : 'the pulse repo';
+  return 'In ' + where + ', read setup/RESOLVE.md and resolve my uncategorized Pulse items.';
+}
 
 function bar(pct, status){
   var w = Math.min(100, pct);
@@ -127,9 +130,9 @@ function renderPeople(){
 function renderResolve(){
   var html = headHTML('Resolve uncategorized', 'time', '‹ back');
   html += '<div class="rlead">Pulse couldn\'t confidently place these. Paste this into '
-    + 'Claude Code in the pulse folder and it will categorize them, teach the registry, '
+    + 'Claude Code (any folder) and it will categorize them, teach the registry, '
     + 'and re-run:</div>';
-  html += '<div class="rprompt">'+RESOLVE_PROMPT+'</div>';
+  html += '<div class="rprompt">'+resolvePrompt()+'</div>';
   html += '<div class="rcopy" onclick="copyPrompt()">copy</div>';
   var d = VM.uncategorized_detail || {sessions:[], meetings:[]};
   if(d.sessions && d.sessions.length){
@@ -147,7 +150,7 @@ function copyPrompt(){
   var done = function(msg){ var el=document.querySelector('.rcopy');
     if(el){ el.textContent=msg; setTimeout(function(){ if(el) el.textContent='copy'; }, 1600); } };
   try{
-    navigator.clipboard.writeText(RESOLVE_PROMPT)
+    navigator.clipboard.writeText(resolvePrompt())
       .then(function(){ done('copied ✓'); }, function(){ done('select text above'); });
   }catch(e){ done('select text above'); }
 }

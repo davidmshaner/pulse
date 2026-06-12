@@ -57,6 +57,7 @@ def build_view_model(state: dict) -> dict:
 
     return {
         "generated_at": state.get("generated_at"),
+        "repo_path": state.get("repo_path", ""),
         "total": total,
         "engagements": engagements,
         "now": now,

@@ -492,6 +492,7 @@ def main() -> None:
 
     state = {
         "generated_at":         generated_at,
+        "repo_path":            str(WIDGET_DIR),
         "windows_raw_minutes":  by_window,
         "total":                total_block,
         "engagements":          engagement_state,
