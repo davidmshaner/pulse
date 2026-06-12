@@ -27,6 +27,7 @@ DEPLOY_WEEK = config.DEPLOY_WEEK          # only used for registry/learnings/rul
 SCRIPTS = WIDGET_DIR                       # vendored scan_sessions/prematch/fetch_meetings live here
 APPETITE = WIDGET_DIR / "appetite.yaml"
 STATE = WIDGET_DIR / "state.json"
+UNCATEGORIZED = WIDGET_DIR / "uncategorized.json"
 CACHE = WIDGET_DIR / ".cache"
 CACHE.mkdir(exist_ok=True)
 
@@ -154,28 +155,30 @@ def soft_resolve_meeting(m: dict, learnings: dict) -> list[str] | None:
     return None
 
 
-def all_resolved_meetings(prematch_data: dict, learnings: dict) -> tuple[list[dict], int]:
-    """Returns (resolved_meetings, still_unresolved_count).
+def all_resolved_meetings(prematch_data: dict, learnings: dict) -> tuple[list[dict], list[dict]]:
+    """Returns (resolved_meetings, unresolved_meetings).
 
     Combines:
       - prematch_data['confident']['meetings'] (already have bucket_path)
       - prematch_data['needs_llm']['meetings'] that soft-resolve via co-attendees
-    Excludes solo meetings (already filtered by prematch).
+    Excludes solo meetings (already filtered by prematch). Unresolved meetings
+    (real, co-attended, but unmatched) are returned so they can be surfaced for
+    the user to resolve.
     """
     resolved: list[dict] = list(prematch_data["confident"]["meetings"])
-    still_unresolved = 0
+    unresolved: list[dict] = []
     for m in prematch_data["needs_llm"]["meetings"]:
         if m.get("solo"):
             continue
         bp = soft_resolve_meeting(m, learnings)
         if bp is None:
-            still_unresolved += 1
+            unresolved.append(m)
             continue
         m2 = dict(m)
         m2["bucket_path"] = bp
         m2["reason"] = "soft_resolved_unambig_co_attendee"
         resolved.append(m2)
-    return resolved, still_unresolved
+    return resolved, unresolved
 
 
 # --- per-window math -------------------------------------------------------
@@ -292,6 +295,74 @@ def build_people(learnings: dict) -> list[dict]:
     return out
 
 
+def _decode_project(encoded: str | None) -> str:
+    """~/.claude/projects encodes a path as the abs path with '/' -> '-'. Decode
+    to a readable path for the user/Claude (best-effort; dashes in dir names are
+    rare and harmless here)."""
+    if not encoded:
+        return ""
+    return encoded.replace("-", "/")
+
+
+def _session_brief(s: dict) -> dict:
+    edits = s.get("edit_paths") or {}
+    top = sorted(edits.items(), key=lambda kv: -kv[1])[:5] if isinstance(edits, dict) else []
+    return {
+        "project_dir": _decode_project(s.get("encoded")),
+        "top_files": [p for p, _ in top],
+        "first_message": (s.get("first_msg") or "")[:200],
+        "reason": s.get("reason"),
+    }
+
+
+def _meeting_brief(m: dict) -> dict:
+    return {
+        "title": m.get("title"),
+        "attendees": m.get("co_attendees", []),
+        "start": m.get("start"),
+    }
+
+
+def write_uncategorized(sessions: list[dict], meetings: list[dict],
+                        generated_at: str) -> None:
+    """Dump the unresolved work so `setup/RESOLVE.md` (run in Claude Code) can
+    categorize it and teach the registry. Local file, gitignored."""
+    payload = {
+        "generated_at": generated_at,
+        "note": "Pulse could not confidently categorize these. "
+                "Run: 'Read setup/RESOLVE.md and resolve my uncategorized Pulse items.'",
+        "sessions": [_session_brief(s) for s in sessions],
+        "meetings": [_meeting_brief(m) for m in meetings],
+    }
+    tmp = UNCATEGORIZED.with_suffix(".tmp")
+    with open(tmp, "w") as f:
+        json.dump(payload, f, indent=2, default=str)
+    tmp.rename(UNCATEGORIZED)
+
+
+def uncategorized_detail(sessions: list[dict], meetings: list[dict]) -> dict:
+    """A short preview for the panel's Resolve view (labels only, capped)."""
+    def slabel(s: dict) -> str:
+        edits = s.get("edit_paths") or {}
+        if isinstance(edits, dict) and edits:
+            top = sorted(edits.items(), key=lambda kv: -kv[1])[0][0]
+            return top.split("/")[-1] or top
+        fm = (s.get("first_msg") or "").strip()
+        if fm.startswith("<"):                 # drop a leading system/command tag
+            j = fm.find(">")
+            fm = fm[j + 1:].strip() if j != -1 else fm
+        if fm.lower().startswith("caveat"):    # system command-expansion preamble, no signal
+            fm = ""
+        if fm:
+            snip = " ".join(fm.split()[:5])
+            return (snip[:34] + "…") if len(snip) > 34 else snip
+        return "(uncategorized session)"
+    return {
+        "sessions": [slabel(s) for s in sessions][:6],
+        "meetings": [m.get("title") or "(untitled)" for m in meetings][:6],
+    }
+
+
 def find_hours(rolled: dict[str, float], leaf_name: str) -> float:
     """Match by last path segment so a leaf name finds its full dotted path (e.g. 'Alpha' -> 'Acme.Alpha')."""
     for path_str, mins in rolled.items():
@@ -362,7 +433,8 @@ def main() -> None:
     # Load learnings for soft meeting resolution
     with open(DEPLOY_WEEK / "context" / "learnings.yaml") as f:
         learnings = yaml.safe_load(f) or {}
-    meetings, still_unresolved_meetings = all_resolved_meetings(prematch, learnings)
+    meetings, unresolved_meetings = all_resolved_meetings(prematch, learnings)
+    still_unresolved_meetings = len(unresolved_meetings)
 
     by_window: dict[str, dict[str, float]] = {}
     for name, (ws, we) in wins.items():
@@ -414,8 +486,12 @@ def main() -> None:
         if log_path.exists() else None
     )
 
+    generated_at = datetime.now(LOCAL_TZ).isoformat(timespec="seconds")
+    # Dump the unresolved work for setup/RESOLVE.md (run in Claude Code) to act on.
+    write_uncategorized(needs_llm_sessions, unresolved_meetings, generated_at)
+
     state = {
-        "generated_at":         datetime.now(LOCAL_TZ).isoformat(timespec="seconds"),
+        "generated_at":         generated_at,
         "windows_raw_minutes":  by_window,
         "total":                total_block,
         "engagements":          engagement_state,
@@ -424,6 +500,7 @@ def main() -> None:
             "sessions": len(needs_llm_sessions),
             "meetings": still_unresolved_meetings,
         },
+        "uncategorized_detail": uncategorized_detail(needs_llm_sessions, unresolved_meetings),
         "meeting_breakdown": {
             "total_resolved": len(meetings),
             "soft_resolved": sum(1 for m in meetings if m.get("reason") == "soft_resolved_unambig_co_attendee"),

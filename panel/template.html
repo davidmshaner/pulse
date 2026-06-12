@@ -11,7 +11,7 @@
   @font-face { font-family:'JetBrains Mono'; font-weight:600;
     src:url('fonts/jetbrains-mono-600.woff2') format('woff2'); }
   :root{ --cream:#F7F5F2; --ink:#2D2A26; --sage:#5B7B6A; --muted:#8A857D;
-         --amber:#C08A3E; --clay:#B0533F; }
+         --amber:#C08A3E; --clay:#B0533F; --line:#E7E3DD; --panel:#EFEBE5; }
   *{margin:0;padding:0;box-sizing:border-box;}
   html,body{background:var(--cream);color:var(--ink);
     font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;}
@@ -25,29 +25,41 @@
   .row .top{display:flex;justify-content:space-between;font-size:12px;font-weight:500;}
   .row .name{letter-spacing:0.3px;}
   .row .figs{color:var(--muted);font-size:11px;}
-  .bar{height:5px;background:#E7E3DD;border-radius:3px;margin:5px 0 4px;overflow:hidden;}
+  .bar{height:5px;background:var(--line);border-radius:3px;margin:5px 0 4px;overflow:hidden;}
   .bar > i{display:block;height:100%;border-radius:3px;}
   .s-under > i{background:var(--sage);} .s-near > i{background:var(--amber);}
   .s-over  > i{background:var(--clay);}
   .row .sub{display:flex;gap:14px;font-size:10px;color:var(--muted);letter-spacing:0.3px;}
   .row .sub .mtg{color:var(--sage);}
-  .now{margin-top:12px;padding-top:10px;border-top:1px solid #E7E3DD;
+  .now{margin-top:12px;padding-top:10px;border-top:1px solid var(--line);
     font-size:11px;color:var(--ink);display:flex;justify-content:space-between;}
   .now .dot{color:var(--sage);}
   .foot{margin-top:8px;font-size:10px;color:var(--muted);}
   .foot .mtgcount{color:var(--ink);font-weight:500;}
-  .total{background:#EFEBE5;border-radius:6px;padding:10px 12px;margin-bottom:6px;}
+  .foot .reslink{color:var(--sage);cursor:pointer;font-weight:500;}
+  .foot .reslink:hover{color:var(--ink);}
+  .total{background:var(--panel);border-radius:6px;padding:10px 12px;margin-bottom:6px;}
   .pgroup{margin:11px 0;}
   .pproj{font-size:12px;font-weight:600;letter-spacing:0.3px;}
   .pnames{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.55;}
-  .phint{margin-top:12px;padding-top:10px;border-top:1px solid #E7E3DD;
-    font-size:10px;color:var(--muted);}
+  .phint,.rlead{margin-top:0;font-size:10px;color:var(--muted);line-height:1.5;}
+  .phint{margin-top:12px;padding-top:10px;border-top:1px solid var(--line);}
+  .rlead{margin-bottom:8px;}
+  .rprompt{font-size:11px;background:var(--panel);border:1px solid var(--line);border-radius:6px;
+    padding:9px 11px;line-height:1.45;user-select:all;word-break:break-word;color:var(--ink);}
+  .rcopy{display:inline-block;margin-top:8px;font-size:10px;color:var(--sage);cursor:pointer;
+    border:1px solid var(--sage);border-radius:4px;padding:3px 10px;letter-spacing:0.3px;}
+  .rcopy:hover{background:var(--sage);color:var(--cream);}
+  .rgroup{margin-top:13px;}
+  .rh{font-size:11px;font-weight:600;color:var(--ink);letter-spacing:0.3px;}
+  .ritems{font-size:10px;color:var(--muted);margin-top:3px;line-height:1.55;}
 </style>
 </head>
 <body>
 <div id="app"></div>
 <script>
 var VM = null, VIEW = 'time';
+var RESOLVE_PROMPT = 'Read setup/RESOLVE.md and resolve my uncategorized Pulse items.';
 
 function bar(pct, status){
   var w = Math.min(100, pct);
@@ -86,8 +98,11 @@ function renderTime(){
   var foot = '';
   if(VM.meetings_wtd){ foot += '<div class="foot"><span class="mtgcount">'
     + VM.meetings_wtd+' meetings</span> counted this week</div>'; }
-  if(VM.uncategorized){ foot += '<div class="foot">uncategorized: '
-    + VM.uncategorized.sessions+' sessions, '+VM.uncategorized.meetings+' meetings</div>'; }
+  var u = VM.uncategorized;
+  if(u && (u.sessions + u.meetings) > 0){
+    foot += '<div class="foot">uncategorized: '+u.sessions+' sessions, '+u.meetings
+      + ' meetings &nbsp;<span class="reslink" onclick="setView(\'resolve\')">resolve ›</span></div>';
+  }
   document.getElementById('app').innerHTML = html + foot;
 }
 
@@ -109,9 +124,39 @@ function renderPeople(){
   document.getElementById('app').innerHTML = html;
 }
 
+function renderResolve(){
+  var html = headHTML('Resolve uncategorized', 'time', '‹ back');
+  html += '<div class="rlead">Pulse couldn\'t confidently place these. Paste this into '
+    + 'Claude Code in the pulse folder and it will categorize them, teach the registry, '
+    + 'and re-run:</div>';
+  html += '<div class="rprompt">'+RESOLVE_PROMPT+'</div>';
+  html += '<div class="rcopy" onclick="copyPrompt()">copy</div>';
+  var d = VM.uncategorized_detail || {sessions:[], meetings:[]};
+  if(d.sessions && d.sessions.length){
+    html += '<div class="rgroup"><div class="rh">sessions</div>'
+      + '<div class="ritems">'+d.sessions.join(', ')+'</div></div>';
+  }
+  if(d.meetings && d.meetings.length){
+    html += '<div class="rgroup"><div class="rh">meetings</div>'
+      + '<div class="ritems">'+d.meetings.join(' · ')+'</div></div>';
+  }
+  document.getElementById('app').innerHTML = html;
+}
+
+function copyPrompt(){
+  var done = function(msg){ var el=document.querySelector('.rcopy');
+    if(el){ el.textContent=msg; setTimeout(function(){ if(el) el.textContent='copy'; }, 1600); } };
+  try{
+    navigator.clipboard.writeText(RESOLVE_PROMPT)
+      .then(function(){ done('copied ✓'); }, function(){ done('select text above'); });
+  }catch(e){ done('select text above'); }
+}
+
 function paint(){
   if(!VM){ document.getElementById('app').textContent='No data yet.'; return; }
-  if(VIEW==='people'){ renderPeople(); } else { renderTime(); }
+  if(VIEW==='people'){ renderPeople(); }
+  else if(VIEW==='resolve'){ renderResolve(); }
+  else { renderTime(); }
 }
 function setView(v){ VIEW = v; paint(); }
 function renderPulse(vm){ VM = vm; paint(); }

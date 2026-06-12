@@ -25,6 +25,7 @@ STATE = {
     "needs_llm": {"sessions": 3, "meetings": 11},
     "meetings_wtd": 6,
     "people": [{"name": "Dana", "project": "Acme"}, {"name": "Wei", "project": "Globex"}],
+    "uncategorized_detail": {"sessions": ["api.py"], "meetings": ["Acme sync"]},
 }
 
 def test_total_block_normalized():
@@ -73,3 +74,9 @@ def test_people_and_meeting_count_passthrough():
     assert vm["meetings_wtd"] == 6
     assert vm["people"] == [{"name": "Dana", "project": "Acme"},
                             {"name": "Wei", "project": "Globex"}]
+
+def test_uncategorized_detail_passthrough_and_default():
+    vm = build_view_model(STATE)
+    assert vm["uncategorized_detail"] == {"sessions": ["api.py"], "meetings": ["Acme sync"]}
+    s = dict(STATE); del s["uncategorized_detail"]
+    assert build_view_model(s)["uncategorized_detail"] == {"sessions": [], "meetings": []}

@@ -61,6 +61,7 @@ def build_view_model(state: dict) -> dict:
         "engagements": engagements,
         "now": now,
         "uncategorized": state.get("needs_llm", {"sessions": 0, "meetings": 0}),
+        "uncategorized_detail": state.get("uncategorized_detail", {"sessions": [], "meetings": []}),
         "meetings_wtd": state.get("meetings_wtd", 0),
         "people": state.get("people", []),
     }
