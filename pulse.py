@@ -86,7 +86,7 @@ class PulseApp(rumps.App):
     def _run_snapshot(self) -> bool:
         try:
             subprocess.run(
-                ["python3", str(SNAPSHOT_SCRIPT)],
+                [sys.executable, str(SNAPSHOT_SCRIPT)],
                 check=True, capture_output=True, timeout=SNAPSHOT_TIMEOUT,
             )
             return True

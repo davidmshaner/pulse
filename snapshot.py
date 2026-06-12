@@ -23,7 +23,7 @@ sys.path.insert(0, str(WIDGET_DIR))
 import config  # noqa: E402
 import scan_cowork  # noqa: E402
 
-DEPLOY_WEEK = config.DEPLOY_WEEK          # only used for registry/learnings/rules DATA paths
+DEPLOY_WEEK = config.DEPLOY_WEEK          # only used for the optional session-log.md timestamp
 SCRIPTS = WIDGET_DIR                       # vendored scan_sessions/prematch/fetch_meetings live here
 APPETITE = WIDGET_DIR / "appetite.yaml"
 STATE = WIDGET_DIR / "state.json"
@@ -89,7 +89,7 @@ def iso_tz(dt: datetime) -> str:
 def run_scan(start: datetime, end: datetime) -> Path:
     out = CACHE / "sessions.json"
     subprocess.run(
-        ["python3", str(SCRIPTS / "scan_sessions.py"),
+        [sys.executable, str(SCRIPTS / "scan_sessions.py"),
          "--start", iso_naive(start),
          "--end",   iso_naive(end),
          "--out",   str(out)],
@@ -105,7 +105,7 @@ def run_fetch_meetings(start: datetime, end: datetime) -> Path:
     out = CACHE / "meetings.json"
     try:
         subprocess.run(
-            ["python3", str(SCRIPTS / "fetch_meetings.py"),
+            [sys.executable, str(SCRIPTS / "fetch_meetings.py"),
              "--start", iso_tz(start),
              "--end",   iso_tz(end),
              "--out",   str(out)],
@@ -120,12 +120,12 @@ def run_fetch_meetings(start: datetime, end: datetime) -> Path:
 def run_prematch(sessions_path: Path, meetings_path: Path) -> dict:
     out = CACHE / "prematch.json"
     subprocess.run(
-        ["python3", str(SCRIPTS / "prematch.py"),
+        [sys.executable, str(SCRIPTS / "prematch.py"),
          "--sessions",  str(sessions_path),
          "--meetings",  str(meetings_path),
-         "--registry",  str(DEPLOY_WEEK / "context" / "bucket-registry.yaml"),
-         "--learnings", str(DEPLOY_WEEK / "context" / "learnings.yaml"),
-         "--rules",     str(DEPLOY_WEEK / "context" / "disambiguation-rules.yaml"),
+         "--registry",  str(config.REGISTRY),
+         "--learnings", str(config.LEARNINGS),
+         "--rules",     str(config.RULES),
          "--out",       str(out)],
         check=True, capture_output=True,
     )
@@ -281,10 +281,14 @@ def load_total_budget() -> dict | None:
     }
 
 
-def caps(monthly_value: float, target_rate: float) -> tuple[float, float]:
-    monthly_cap = monthly_value / target_rate
-    weekly_cap = monthly_cap / WEEKS_PER_MONTH
-    return weekly_cap, monthly_cap
+def caps_for(cfg: dict) -> tuple[float, float]:
+    """Weekly/monthly hour caps from either appetite shape: plain weekly_hours,
+    or rate mode (monthly_value + target_rate derives the cap)."""
+    if "weekly_hours" in cfg:
+        weekly_cap = float(cfg["weekly_hours"])
+        return weekly_cap, weekly_cap * WEEKS_PER_MONTH
+    monthly_cap = cfg["monthly_value"] / cfg["target_rate"]
+    return monthly_cap / WEEKS_PER_MONTH, monthly_cap
 
 
 def remaining_or_over(actual_h: float, cap_h: float) -> dict:
@@ -316,7 +320,7 @@ def main() -> None:
     all_sessions = confident_sessions + cowork_sessions
 
     # Load learnings for soft meeting resolution
-    with open(DEPLOY_WEEK / "context" / "learnings.yaml") as f:
+    with open(config.LEARNINGS) as f:
         learnings = yaml.safe_load(f) or {}
     meetings, still_unresolved_meetings = all_resolved_meetings(prematch, learnings)
 
@@ -327,14 +331,14 @@ def main() -> None:
     appetite = load_appetite()
     engagement_state: dict[str, dict] = {}
     for name, cfg in appetite.items():
-        weekly_cap, monthly_cap = caps(cfg["monthly_value"], cfg["target_rate"])
+        weekly_cap, monthly_cap = caps_for(cfg)
         h_today = find_hours(by_window["today"], name)
         h_wtd   = find_hours(by_window["wtd"],   name)
         h_7d    = find_hours(by_window["7d"],    name)
         h_30d   = find_hours(by_window["30d"],   name)
         engagement_state[name] = {
-            "monthly_value":  cfg["monthly_value"],
-            "target_rate":    cfg["target_rate"],
+            **({"monthly_value": cfg["monthly_value"], "target_rate": cfg["target_rate"]}
+               if "monthly_value" in cfg else {}),
             "weekly_cap_h":   round(weekly_cap,  2),
             "monthly_cap_h":  round(monthly_cap, 2),
             "today_h":        round(h_today, 2),

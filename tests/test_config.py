@@ -9,10 +9,11 @@ sys.path.insert(0, str(WIDGET))
 import config  # noqa: E402
 
 
-def test_projects_dirs_includes_private_tmp():
+def test_projects_dirs_resolved():
     names = {p.name for p in config.PROJECTS_DIRS}
     assert "projects" in names, config.PROJECTS_DIRS
-    assert "-private-tmp" in names, config.PROJECTS_DIRS
+    for p in config.PROJECTS_DIRS:
+        assert p.is_absolute(), p
 
 
 def test_cowork_root_is_local_agent_sessions():
@@ -30,9 +31,11 @@ def test_timecore_dir_importable():
     from classify import walk_registry  # noqa: F401
 
 
-def test_deploy_week_paths_exist():
+def test_categorization_inputs_exist():
+    # Registry + vendored pipeline scripts are repo-local; deploy-week is optional.
     assert config.REGISTRY.exists(), config.REGISTRY
-    assert config.SCRIPTS.is_dir(), config.SCRIPTS
+    for script in ("scan_sessions.py", "prematch.py", "fetch_meetings.py"):
+        assert (WIDGET / script).exists(), script
 
 
 def test_calendar_config_shape():
