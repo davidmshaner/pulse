@@ -4,7 +4,7 @@
   <img src="assets/hero.png" alt="Pulse menu-bar card: time split across projects, over-budget in red" width="380">
 </p>
 
-**Know where your time actually went.**
+<h2 align="center">Know where your time actually went.</h2>
 
 If you work through Claude Code all day across more than one project, you have no
 honest idea how much time each one got. Session length lies. Your starting folder
