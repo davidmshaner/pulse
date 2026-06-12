@@ -1,5 +1,9 @@
 # Pulse
 
+<p align="center">
+  <img src="assets/hero.png" alt="Pulse menu-bar card: time split across projects, over-budget in red" width="380">
+</p>
+
 **Know where your time actually went.**
 
 If you work through Claude Code all day across more than one project, you have no
