@@ -25,13 +25,13 @@ roots. Example: "everything under `~/work/acme` → category `Acme`." Roots they
 don't care about are skipped.
 
 Write these into `bucket-registry.yaml` (copy the shape from
-`bucket-registry.example.yaml`): one bucket per category, `source_path` set to the
+`examples/bucket-registry.example.yaml`): one bucket per category, `source_path` set to the
 root (use `additional_paths` for extra roots in the same category). Deepest match
 wins, so a sub-folder category can live inside a parent category.
 
 ## 3. Interview — budgets
 For each category, ask "how many hours per week is this worth?" Write
-`appetite.yaml` (shape from `appetite.example.yaml`) using `weekly_hours`. If the
+`appetite.yaml` (shape from `examples/appetite.example.yaml`) using `weekly_hours`. If the
 user thinks in dollars instead, offer rate mode (`monthly_value` + `target_rate`,
 which derives the cap). Also set an overall `total_budget` (weekly + monthly
 hours) — ask, or sum the categories.
@@ -39,11 +39,11 @@ hours) — ask, or sum the categories.
 ## 4. (Optional) Cowork classification
 If `cowork_dir_exists` is true, ask whether they use Claude Cowork for specific
 work. If so, capture slash-command / sender-email / title→category hints into
-`config.yaml`'s `cowork_classification` (shape in `config.example.yaml`). Skip if
+`config.yaml`'s `cowork_classification` (shape in `examples/config.example.yaml`). Skip if
 they don't use Cowork — those sessions just won't be classified.
 
 ## 5. Write config.yaml
-Copy `config.example.yaml` → `config.yaml`. Set `timezone` (ask, or infer from the
+Copy `examples/config.example.yaml` → `config.yaml`. Set `timezone` (ask, or infer from the
 system), `projects_dirs` (from discovery; add extra dirs only if the user names
 them), and `cowork_root` only if discovery found a non-default location. Leave
 `timecore_dir` / `registry` / `learnings` / `rules` as the repo-local defaults
@@ -72,5 +72,5 @@ re-run `python3 snapshot.py` any time, or edit `appetite.yaml` to adjust budgets
 **Tell them explicitly: meetings are NOT counted yet.** Pulse currently tracks
 Claude Code sessions + Cowork only. To also count calendar time, they can add a
 `calendar` block to `config.yaml` later (Google Calendar via OAuth — see
-`config.example.yaml`). It's off by default and needs their own credentials, so
+`examples/config.example.yaml`). It's off by default and needs their own credentials, so
 don't set it up in this session unless they ask.
