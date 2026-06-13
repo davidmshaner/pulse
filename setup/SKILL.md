@@ -53,7 +53,7 @@ are gitignored — they hold the user's real data and never get pushed.
 ## 6. Install deps + verify
 - `pip3 install rumps pyyaml pyobjc-framework-WebKit` (macOS — WebKit powers the
   designed popover panel) or `pip install pyyaml` (Windows).
-- Run `python3 snapshot.py`. Show the user the per-engagement summary it prints.
+- Run `python3 src/pulse/snapshot.py`. Show the user the per-engagement summary it prints.
   Confirm the categories + hours look right. If a category is missing or
   mis-bucketed, revisit step 2's registry mapping and re-run.
 
@@ -67,7 +67,7 @@ are gitignored — they hold the user's real data and never get pushed.
 
 ## Done
 Tell the user Pulse is running (macOS) or configured (Windows), and that they can
-re-run `python3 snapshot.py` any time, or edit `appetite.yaml` to adjust budgets.
+re-run `python3 src/pulse/snapshot.py` any time, or edit `appetite.yaml` to adjust budgets.
 
 **Tell them explicitly: meetings are NOT counted yet.** Pulse currently tracks
 Claude Code sessions + Cowork only. To also count calendar time, they can add a

@@ -4,7 +4,7 @@ $ErrorActionPreference = "Stop"
 $repo = Split-Path -Parent $MyInvocation.MyCommand.Path
 $pythonw = (Get-Command pythonw.exe -ErrorAction SilentlyContinue).Source
 if (-not $pythonw) { $pythonw = (Get-Command python.exe).Source }
-$script = Join-Path $repo "pulse_win.py"
+$script = Join-Path $repo "src/pulse/app_win.py"
 
 $action  = New-ScheduledTaskAction -Execute $pythonw -Argument "`"$script`"" -WorkingDirectory $repo
 $trigger = New-ScheduledTaskTrigger -AtLogOn

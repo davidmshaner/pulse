@@ -56,7 +56,7 @@ macOS gets the designed panel (a menu-bar card). Windows runs an always-on-top o
 2. `cp examples/config.example.yaml config.yaml` and edit the machine values (timezone, projects_dirs).
 3. `cp examples/bucket-registry.example.yaml bucket-registry.yaml` and map your repo roots to categories.
 4. `cp examples/appetite.example.yaml appetite.yaml` and set per-category hour budgets (or rates).
-5. `python3 snapshot.py` to verify, then `bash install-mac.sh` to run it at login.
+5. `python3 src/pulse/snapshot.py` to verify, then `bash install-mac.sh` to run it at login.
 
 </details>
 

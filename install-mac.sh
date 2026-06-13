@@ -13,7 +13,7 @@ cat > "$PLIST" <<PLISTEOF
 <dict>
   <key>Label</key><string>com.pulse.menubar</string>
   <key>ProgramArguments</key>
-  <array><string>/usr/bin/python3</string><string>-u</string><string>$REPO/panel_app.py</string></array>
+  <array><string>/usr/bin/python3</string><string>-u</string><string>$REPO/src/pulse/app.py</string></array>
   <key>WorkingDirectory</key><string>$REPO</string>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
