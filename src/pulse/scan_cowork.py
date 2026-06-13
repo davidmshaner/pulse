@@ -28,7 +28,7 @@ import sys as _sys  # noqa: E402
 _sys.path.insert(0, str(WIDGET_DIR))
 import config as _config  # noqa: E402
 COWORK_ROOT   = _config.COWORK_ROOT
-NORMALIZED    = WIDGET_DIR / ".cache" / "cowork-jsonls"
+NORMALIZED    = _config.DATA_DIR / ".cache" / "cowork-jsonls"
 
 # Bucket classifier ---------------------------------------------------------
 

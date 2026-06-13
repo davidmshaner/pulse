@@ -13,10 +13,10 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "src" / "pulse"))
 from panel.render_html import render_html  # noqa: E402
 
-PANEL = ROOT / "panel"
+PANEL = ROOT / "src" / "pulse" / "panel"
 TEMPLATE = (PANEL / "template.html").read_text()
 HERO_HTML = PANEL / "_hero.html"           # gitignored; lives in panel/ so fonts/ resolve
 OUT = ROOT / "assets" / "hero.png"

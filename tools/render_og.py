@@ -15,7 +15,7 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-FONTS = ROOT / "panel" / "fonts"
+FONTS = ROOT / "src" / "pulse" / "panel" / "fonts"
 HERO = ROOT / "assets" / "hero.png"
 OG_HTML = Path("/tmp/pulse_og.html")
 OUT = ROOT / "assets" / "social-preview.png"

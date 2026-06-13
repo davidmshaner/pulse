@@ -19,8 +19,9 @@ except ImportError:
     print("MISSING_DEPS: pip install pyyaml", file=sys.stderr)
     sys.exit(2)
 
-WIDGET_DIR = Path(__file__).resolve().parent
-CONFIG_YAML = WIDGET_DIR / "config.yaml"
+PKG_DIR = Path(__file__).resolve().parent      # src/pulse — code, templates, fonts, timecore, sibling scripts
+DATA_DIR = PKG_DIR.parents[1]                  # repo root — user data: config.yaml, state.json, appetite.yaml, ...
+CONFIG_YAML = DATA_DIR / "config.yaml"
 
 
 def _resolve(p: str) -> Path:
@@ -33,7 +34,7 @@ def _load() -> dict:
     if not CONFIG_YAML.exists():
         raise FileNotFoundError(
             f"Pulse config not found: {CONFIG_YAML}. "
-            "Copy config.example.yaml to config.yaml (or run the Pulse setup skill)."
+            "Copy examples/config.example.yaml to config.yaml (or run the Pulse setup skill)."
         )
     with open(CONFIG_YAML) as f:
         return yaml.safe_load(f) or {}
@@ -59,15 +60,15 @@ COWORK_ROOT = _resolve(_cr) if _cr else _default_cowork_root()
 
 # timecore is vendored inside this repo. Default to the package-local copy
 # (clone-location independent); an explicit config value overrides it.
-TIMECORE_DIR = _resolve(_cfg["timecore_dir"]) if _cfg.get("timecore_dir") else WIDGET_DIR / "timecore"
+TIMECORE_DIR = _resolve(_cfg["timecore_dir"]) if _cfg.get("timecore_dir") else PKG_DIR / "timecore"
 
 DEPLOY_WEEK = _resolve(_cfg.get("deploy_week_dir", ".claude/skills/deploy-week"))
 SCRIPTS = DEPLOY_WEEK / "scripts"
 # Categorization inputs default to the repo-local files (standalone). An explicit
 # config value (e.g. David pointing at his deploy-week context) overrides.
-REGISTRY = _resolve(_cfg["registry"]) if _cfg.get("registry") else WIDGET_DIR / "bucket-registry.yaml"
-LEARNINGS = _resolve(_cfg["learnings"]) if _cfg.get("learnings") else WIDGET_DIR / "learnings.yaml"
-RULES = _resolve(_cfg["rules"]) if _cfg.get("rules") else WIDGET_DIR / "disambiguation-rules.yaml"
+REGISTRY = _resolve(_cfg["registry"]) if _cfg.get("registry") else DATA_DIR / "bucket-registry.yaml"
+LEARNINGS = _resolve(_cfg["learnings"]) if _cfg.get("learnings") else DATA_DIR / "learnings.yaml"
+RULES = _resolve(_cfg["rules"]) if _cfg.get("rules") else DATA_DIR / "disambiguation-rules.yaml"
 
 _cal = _cfg.get("calendar") or {}
 CALENDAR_SELF_EMAILS = list(_cal.get("self_emails", []))

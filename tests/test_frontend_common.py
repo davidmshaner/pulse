@@ -2,7 +2,7 @@
 import sys
 from pathlib import Path
 
-WIDGET = Path(__file__).resolve().parent.parent
+WIDGET = Path(__file__).resolve().parent.parent / 'src' / 'pulse'
 sys.path.insert(0, str(WIDGET))
 import frontend_common as fc  # noqa: E402
 

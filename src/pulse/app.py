@@ -18,16 +18,18 @@ import WebKit
 import objc
 from Foundation import NSObject, NSMakeRect, NSMakeSize, NSURL, NSTimer
 
-WIDGET_DIR = Path(__file__).resolve().parent
-SNAPSHOT_SCRIPT = WIDGET_DIR / "snapshot.py"
-STATE = WIDGET_DIR / "state.json"
+PKG_DIR = Path(__file__).resolve().parent
+SNAPSHOT_SCRIPT = PKG_DIR / "snapshot.py"
 
 import sys
-sys.path.insert(0, str(WIDGET_DIR))
+sys.path.insert(0, str(PKG_DIR))
+import config                                          # noqa: E402
 from panel.render_state import build_view_model       # noqa: E402
 from panel.render_html import write_rendered, RENDERED_PATH  # noqa: E402
 import frontend_common as fc                           # noqa: E402
 from live_bucket import detect as detect_live_bucket   # noqa: E402
+
+STATE = config.DATA_DIR / "state.json"
 
 SNAPSHOT_INTERVAL = 600.0   # seconds
 LIVE_INTERVAL = 60.0        # seconds — repaint title glyph
@@ -78,7 +80,7 @@ class AppDelegate(NSObject):
             write_rendered(build_view_model(state))
         self.webview.loadFileURL_allowingReadAccessToURL_(
             NSURL.fileURLWithPath_(str(RENDERED_PATH)),
-            NSURL.fileURLWithPath_(str(WIDGET_DIR / "panel")))
+            NSURL.fileURLWithPath_(str(PKG_DIR / "panel")))
 
     # --- snapshot ---------------------------------------------------------
     def _run_snapshot(self) -> None:

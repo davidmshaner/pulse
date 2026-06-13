@@ -17,9 +17,10 @@ from pathlib import Path
 
 import tkinter as tk
 
-WIDGET_DIR = Path(__file__).resolve().parent
-SNAPSHOT_SCRIPT = WIDGET_DIR / "snapshot.py"
-sys.path.insert(0, str(WIDGET_DIR))
+PKG_DIR = Path(__file__).resolve().parent
+SNAPSHOT_SCRIPT = PKG_DIR / "snapshot.py"
+sys.path.insert(0, str(PKG_DIR))
+import config  # noqa: E402
 import frontend_common as fc  # noqa: E402
 from live_bucket import detect as detect_live_bucket  # noqa: E402
 
@@ -61,10 +62,10 @@ class PulseOverlay:
         self.root.bind("<Button-3>", lambda _e: self.root.destroy())
 
         self._moved = False
-        self._state = fc.load_state(WIDGET_DIR)
+        self._state = fc.load_state(config.DATA_DIR)
         if self._state is None:
             self._run_snapshot()
-            self._state = fc.load_state(WIDGET_DIR)
+            self._state = fc.load_state(config.DATA_DIR)
         self._repaint()
         # Borderless overlay on Windows (overrideredirect works there). On macOS the
         # same call leaves the window empty/broken, so keep the normal title bar.
@@ -141,7 +142,7 @@ class PulseOverlay:
     def _tick_poll(self):
         if self._needs_repaint:
             self._needs_repaint = False
-            self._state = fc.load_state(WIDGET_DIR)
+            self._state = fc.load_state(config.DATA_DIR)
             self._repaint()
         self.root.after(POLL_MS, self._tick_poll)
 

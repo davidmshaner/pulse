@@ -18,17 +18,17 @@ from zoneinfo import ZoneInfo
 
 import yaml
 
-WIDGET_DIR = Path(__file__).resolve().parent
-sys.path.insert(0, str(WIDGET_DIR))
+PKG_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(PKG_DIR))
 import config  # noqa: E402
 import scan_cowork  # noqa: E402
 
 DEPLOY_WEEK = config.DEPLOY_WEEK          # only used for registry/learnings/rules DATA paths
-SCRIPTS = WIDGET_DIR                       # vendored scan_sessions/prematch/fetch_meetings live here
-APPETITE = WIDGET_DIR / "appetite.yaml"
-STATE = WIDGET_DIR / "state.json"
-UNCATEGORIZED = WIDGET_DIR / "uncategorized.json"
-CACHE = WIDGET_DIR / ".cache"
+SCRIPTS = config.PKG_DIR                   # vendored scan_sessions/prematch/fetch_meetings live here
+APPETITE = config.DATA_DIR / "appetite.yaml"
+STATE = config.DATA_DIR / "state.json"
+UNCATEGORIZED = config.DATA_DIR / "uncategorized.json"
+CACHE = config.DATA_DIR / ".cache"
 CACHE.mkdir(exist_ok=True)
 
 # Deterministic time math now comes from the timecore code-block (was deploy-week render).
@@ -530,7 +530,7 @@ def main() -> None:
 
     state = {
         "generated_at":         generated_at,
-        "repo_path":            str(WIDGET_DIR),
+        "repo_path":            str(config.DATA_DIR),
         "windows_raw_minutes":  by_window,
         "total":                total_block,
         "engagements":          engagement_state,

@@ -1,5 +1,5 @@
 import sys, pathlib
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / 'src' / 'pulse'))
 from panel.render_state import build_view_model
 
 STATE = {

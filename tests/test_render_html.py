@@ -1,5 +1,5 @@
 import json, sys, pathlib
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / 'src' / 'pulse'))
 from panel.render_html import render_html
 
 TEMPLATE = "<html><body><script>window.__PULSE_VM__ = /*__PULSE_VM__*/ null;renderPulse(window.__PULSE_VM__);</script></body></html>"

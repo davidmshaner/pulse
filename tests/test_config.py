@@ -3,7 +3,7 @@ Manual-assert style (matches test_snapshot_overlap.py). Run: python3 tests/test_
 import sys
 from pathlib import Path
 
-WIDGET = Path(__file__).resolve().parent.parent
+WIDGET = Path(__file__).resolve().parent.parent / 'src' / 'pulse'
 sys.path.insert(0, str(WIDGET))
 
 import config  # noqa: E402

@@ -17,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-WIDGET = Path(__file__).resolve().parent.parent
+WIDGET = Path(__file__).resolve().parent.parent / 'src' / 'pulse'
 sys.path.insert(0, str(WIDGET))
 
 from snapshot import _compose_per_path_minutes  # noqa: E402
