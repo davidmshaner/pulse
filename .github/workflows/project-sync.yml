@@ -1,0 +1,26 @@
+# Auto-add new issues + PRs to the Pulse project board (board #1, user shanerconsulting).
+# Provisioned by /pulse-dev --bootstrap. Card ADVANCEMENT (issue closed / PR merged -> Done)
+# is handled by the board's built-in Project workflows (Project -> ... -> Workflows), which
+# need no PAT; this Action covers auto-add, which the default GITHUB_TOKEN cannot do for a
+# user-level project.
+#
+# ONE-TIME SETUP: create a fine-grained PAT with Projects:read/write + Issues:read and store
+# it as the repo secret ADD_TO_PROJECT_PAT:
+#   gh secret set ADD_TO_PROJECT_PAT --repo shanerconsulting/pulse
+# Until the secret exists the add step is skipped (no failed runs).
+name: project-sync
+on:
+  issues:
+    types: [opened, reopened, transferred]
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+jobs:
+  add-to-project:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add issue/PR to the Pulse board
+        if: ${{ secrets.ADD_TO_PROJECT_PAT != '' }}
+        uses: actions/add-to-project@v1.0.2
+        with:
+          project-url: https://github.com/users/shanerconsulting/projects/1
+          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
