@@ -47,9 +47,9 @@ coordinating with a parallel agent, and setting up the board are **modes of one 
 ## How the spine maps to Pulse
 | Generic spine step | Pulse | Lives in |
 |---|---|---|
-| 1. Intake | Capture (`--issue`) | `modes/issue.md` |
-| 2. Triage (human) | Backlog → In Progress | David promotes |
-| 3. Execution | Isolate + Build (superpowers) | `modes/work.md` |
+| 1. Intake | Capture (`--issue`) → Backlog | `modes/issue.md` |
+| 2. Triage (human) | Backlog → Up Next | David promotes |
+| 3. Execution | Up Next → In Progress + Build (superpowers) | `modes/work.md` |
 | 4. Pre-release QA (FAR boundary) | `pytest` gate **+ run the real app** | `modes/work.md` + `modes/qa.md` |
 | 5. Review and merge | review (`/code-review`) → merge | `modes/work.md` |
 | 6. Release | **n/a** — a merge to `main` (+ relaunch) IS the end | — |
@@ -61,14 +61,18 @@ coordinating with a parallel agent, and setting up the board are **modes of one 
 
 ## The loop (scannable)
 
+> **Board columns (the same 6 as every harness board):** Backlog → Up Next → In Progress → In
+> Review → QA → Done. Provisioned by `--bootstrap`; every issue AND every PR lives on the board.
+
 **Capture** (`--issue`) — raw ask → an issue rich enough for a cold agent to run without asking.
 Cite `src/pulse/` + `tests/` code as `path:line`, name the area, dedup, classify with one type
 label, land in **Backlog**. *Gate:* labeled issue on the board. → `modes/issue.md`
 
-**Triage** — David moves Backlog → **In Progress** when an issue is picked up. *Gate:* In Progress.
+**Triage** — David moves Backlog → **Up Next** (the ready queue). *Gate:* card on Up Next.
 
-**Isolate** — one worktree per issue: `git worktree add .worktrees/issue-<n> -b issue-<n>` (Pulse
-keeps worktrees under the gitignored `.worktrees/`). Parallel agents each take a distinct issue. →
+**Isolate** — work-mode picks from Up Next, moves the card to **In Progress** as its first action,
+then one worktree per issue: `git worktree add .worktrees/issue-<n> -b issue-<n>` (Pulse keeps
+worktrees under the gitignored `.worktrees/`). Parallel agents each take a distinct issue. →
 `modes/work.md`
 
 **Build** — run the superpowers stack as the work warrants: `brainstorming` (if design is open) →
@@ -79,9 +83,10 @@ keeps worktrees under the gitignored `.worktrees/`). Parallel agents each take a
 the menu-bar card to verify the change on the actual user path. *Gate:* tests green + app
 exercised. → `modes/qa.md`
 
-**PR → review → merge** — open a PR against `main` (`Closes #<n>`); review with `/code-review` or a
-review subagent before merge. Merge → board item to **Done** → `git worktree remove
-.worktrees/issue-<n>`. *Gate:* merged, worktree gone. → `modes/work.md`
+**PR → In Review → QA → Done** — open a PR against `main` (`Closes #<n>`) and move the card to **In
+Review**; review with `/code-review` or a review subagent. Run the app (`--qa`) and move to **QA**.
+Merge → card to **Done** → `git worktree remove .worktrees/issue-<n>`. *Gate:* merged, worktree
+gone. → `modes/work.md`
 
 **Compounding feedback** — if the pickup needed context the issue should have carried, make a
 narrow edit to `modes/issue.md` (Enrich step). → `modes/work.md`
