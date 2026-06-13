@@ -16,3 +16,4 @@ _hero.html
 panel/_*.html
 uncategorized.json
 uncategorized.tmp
+.worktrees/
