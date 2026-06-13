@@ -21,6 +21,12 @@
   .head .verdict{font-size:13px;font-weight:600;letter-spacing:-0.2px;}
   .head .toggle{font-size:11px;font-weight:500;color:var(--sage);cursor:pointer;letter-spacing:0.3px;}
   .head .toggle:hover{color:var(--ink);}
+  .head .pick{font-size:12px;font-weight:500;letter-spacing:0.3px;}
+  .head .pick .seg{color:var(--muted);cursor:pointer;}
+  .head .pick .seg:hover{color:var(--ink);}
+  .head .pick .seg.active{color:var(--sage);font-weight:600;}
+  .head .pick .pdiv{color:var(--line);padding:0 6px;}
+  .row .sub .trk{color:var(--muted);}
   .row{margin:10px 0;}
   .row .top{display:flex;justify-content:space-between;font-size:12px;font-weight:500;}
   .row .name{letter-spacing:0.3px;}
@@ -58,7 +64,9 @@
 <body>
 <div id="app"></div>
 <script>
-var VM = null, VIEW = 'time';
+var VM = null, VIEW = 'time', WINDOW = 'week';
+try{ var _sw = localStorage.getItem('pulse_window');
+     if(_sw==='week'||_sw==='month') WINDOW=_sw; }catch(e){}
 function resolvePrompt(){
   var where = (VM && VM.repo_path) ? VM.repo_path : 'the pulse repo';
   return 'In ' + where + ', read setup/RESOLVE.md and resolve my uncategorized Pulse items.';
@@ -75,15 +83,30 @@ function headHTML(title, toggleView, toggleLabel){
     + '<span class="toggle" onclick="setView(\''+toggleView+'\')">'+toggleLabel+'</span></div>';
 }
 
-function rowHTML(e, isTotal){
-  var verdict = e.status==='over' ? (e.pct-100)+'% over'
-              : (e.cap_h - e.actual_h).toFixed(1)+'h left';
+function seg(w){
+  return '<span class="seg'+(WINDOW===w?' active':'')+'" onclick="setWindow(\''+w+'\')">'+w+'</span>';
+}
+
+function rowHTML(e){
+  var w = (WINDOW==='month') ? e.month : e.week;
+  var unit = (WINDOW==='month') ? 'mo' : 'wk';
+  var cls = 'row' + (e.is_group ? ' total' : '');
+  if(e.track_only){
+    return '<div class="'+cls+'"><div class="top">'
+      + '<span class="name">'+e.name+'</span>'
+      + '<span class="figs">'+fig(w.actual_h)+' '+unit+'</span></div>'
+      + '<div class="sub"><span class="trk">tracked</span>'
+      + '<span>today '+fig(e.today_h)+'</span>'
+      + '<span>7d '+fig(e.d7_h)+'</span></div></div>';
+  }
+  var verdict = w.status==='over' ? (w.pct-100)+'% over'
+              : (w.cap_h - w.actual_h).toFixed(1)+'h left';
   var mtg = (e.meeting_h && e.meeting_h > 0)
           ? '<span class="mtg">mtg '+fig(e.meeting_h)+'</span>' : '';
-  return '<div class="row'+(isTotal?' total':'')+'">'
+  return '<div class="'+cls+'">'
     + '<div class="top"><span class="name">'+e.name+'</span>'
-    + '<span class="figs">'+fig(e.actual_h)+' / '+fig(e.cap_h)+' wk</span></div>'
-    + bar(e.pct, e.status)
+    + '<span class="figs">'+fig(w.actual_h)+' / '+fig(w.cap_h)+' '+unit+'</span></div>'
+    + bar(w.pct, w.status)
     + '<div class="sub"><span>'+verdict+'</span>'
     + '<span>today '+fig(e.today_h)+'</span>'
     + '<span>7d '+fig(e.d7_h)+'</span>'
@@ -91,14 +114,17 @@ function rowHTML(e, isTotal){
 }
 
 function renderTime(){
-  var over = VM.engagements.filter(function(e){return e.status==='over';}).length;
-  var title = over ? over+' over budget' : 'all within budget';
-  var html = headHTML(title, 'people', 'people ›');
-  if(VM.total){ var t=Object.assign({name:'Billable'}, VM.total); html += rowHTML(t, true); }
-  VM.engagements.forEach(function(e){ html += rowHTML(e, false); });
+  var html = '<div class="head"><span class="pick">'
+    + seg('week') + '<span class="pdiv">/</span>' + seg('month')
+    + '</span><span class="toggle" onclick="setView(\'people\')">people ›</span></div>';
+  (VM.groups||[]).forEach(function(g){ html += rowHTML(g); });
+  VM.engagements.forEach(function(e){ html += rowHTML(e); });
   if(VM.now){ html += '<div class="now"><span><span class="dot">●</span> now: '
     + VM.now.label+'</span><span>~'+VM.now.elapsed_min+' min</span></div>'; }
   var foot = '';
+  var warns = (VM.groups||[]).filter(function(g){return g.overlap && g.overlap.length;});
+  if(warns.length){ foot += '<div class="foot" style="color:var(--clay)">'
+    + '⚠ group overlap — a member bucket contains another; check appetite.yaml</div>'; }
   if(VM.meetings_wtd){ foot += '<div class="foot"><span class="mtgcount">'
     + VM.meetings_wtd+' meetings</span> counted this week</div>'; }
   var u = VM.uncategorized;
@@ -165,6 +191,7 @@ function paint(){
   else { renderTime(); }
 }
 function setView(v){ VIEW = v; paint(); }
+function setWindow(w){ WINDOW = w; try{ localStorage.setItem('pulse_window', w); }catch(e){} paint(); }
 function renderPulse(vm){ VM = vm; paint(); }
 
 window.__PULSE_VM__ = /*__PULSE_VM__*/ null;

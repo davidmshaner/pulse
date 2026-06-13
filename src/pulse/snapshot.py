@@ -416,19 +416,31 @@ def load_appetite() -> dict[str, dict]:
     return data.get("engagements", {})
 
 
-def load_total_budget() -> dict | None:
-    """Top-level billable-hours budget (weekly + monthly). Returns None if not set."""
+def load_groups() -> list[dict]:
+    """User-defined roll-up groups. Each group bundles member engagements under
+    one aggregate cap. Returns a list of {name, members, weekly_hours, monthly_hours}
+    in definition order.
+
+    Back-compat: if `groups:` is absent but the legacy `total_budget:` is present,
+    synthesize a single 'Billable' group over all members ('*'), so old configs and
+    examples/appetite.example.yaml keep working with no edit.
+    """
     if not APPETITE.exists():
-        return None
+        return []
     with open(APPETITE) as f:
         data = yaml.safe_load(f) or {}
+    groups = data.get("groups")
+    if groups:
+        return [{"name": name, **(g or {})} for name, g in groups.items()]
     tb = data.get("total_budget")
-    if not tb:
-        return None
-    return {
-        "weekly_hours":  float(tb.get("weekly_hours",  0)),
-        "monthly_hours": float(tb.get("monthly_hours", 0)),
-    }
+    if tb:
+        return [{
+            "name": "Billable",
+            "members": "*",
+            "weekly_hours":  float(tb.get("weekly_hours",  0)),
+            "monthly_hours": float(tb.get("monthly_hours", 0)),
+        }]
+    return []
 
 
 def caps(monthly_value: float, target_rate: float) -> tuple[float, float]:
@@ -437,11 +449,84 @@ def caps(monthly_value: float, target_rate: float) -> tuple[float, float]:
     return weekly_cap, monthly_cap
 
 
+def engagement_caps(cfg: dict) -> tuple[float | None, float | None]:
+    """Resolve (weekly_cap_h, monthly_cap_h) for one engagement. Three modes:
+
+      rate   — monthly_value + target_rate  -> derived caps (David's billable style)
+      hours  — weekly_hours and/or monthly_hours -> direct caps (the missing one is
+               derived via WEEKS_PER_MONTH)
+      track  — neither  -> (None, None): tracked, shown, but uncapped (no bar). This
+               is how Personal / Shaner Consulting / Redacted / Pipeline come in.
+    """
+    if "monthly_value" in cfg and "target_rate" in cfg:
+        return caps(cfg["monthly_value"], cfg["target_rate"])
+    if "weekly_hours" in cfg or "monthly_hours" in cfg:
+        wk = cfg.get("weekly_hours")
+        mo = cfg.get("monthly_hours")
+        wk = float(wk) if wk is not None else (float(mo) / WEEKS_PER_MONTH if mo is not None else None)
+        mo = float(mo) if mo is not None else (wk * WEEKS_PER_MONTH if wk is not None else None)
+        return wk, mo
+    return None, None
+
+
 def remaining_or_over(actual_h: float, cap_h: float) -> dict:
     delta = cap_h - actual_h
     if delta >= 0:
         return {"hours_left": round(delta, 1), "over": False}
     return {"hours_over": round(-delta, 1), "over": True}
+
+
+def _full_path_for(rolled: dict[str, float], leaf: str) -> str | None:
+    """The full dotted path in `rolled` whose last segment is `leaf` (or None)."""
+    for path_str in rolled:
+        if path_str.split(".")[-1] == leaf:
+            return path_str
+    return None
+
+
+def apply_remainder(engagement_state: dict, canon: dict[str, str | None],
+                    remainder_names: list[str]) -> None:
+    """Mutate each remainder engagement so its hours = parent total MINUS the sum of
+    every other engagement that is a strict descendant of it. This is how 'Shaner
+    Consulting' (bucket SC) becomes 'all SC work that isn't a billable client or
+    Redacted/Pipeline' — it absorbs SC-internal AND bare-SC-root sessions without
+    double-counting the billable children. `canon` maps engagement -> canonical
+    dotted path (from the widest window)."""
+    for name in remainder_names:
+        parent = canon.get(name)
+        if not parent:
+            continue
+        desc = [m for m in engagement_state
+                if m != name and canon.get(m) and canon[m].startswith(parent + ".")]
+        st = engagement_state[name]
+        st["today_h"] = round(max(0.0, st["today_h"]
+                                  - sum(engagement_state[m]["today_h"] for m in desc)), 2)
+        for wk in ("wtd", "7d", "30d"):
+            sub = sum(engagement_state[m][wk]["actual_h"] for m in desc)
+            st[wk]["actual_h"] = round(max(0.0, st[wk]["actual_h"] - sub), 2)
+        st["remainder"] = True
+        st["remainder_minus"] = desc
+
+
+def _group_overlap(members: list[str], engagement_state: dict, rolled: dict[str, float]) -> list[str]:
+    """Warn if two members' bucket paths are in an ancestor relationship — summing
+    them double-counts (e.g. an 'SC' parent member alongside its 'SC.Metis' child).
+    Remainder engagements are exempt (the parent-minus-children subtraction is
+    intentional and already deduped). Uses resolved 30d paths. Never raises."""
+    paths: dict[str, str] = {}
+    for m in members:
+        if engagement_state[m].get("remainder"):
+            continue
+        p = _full_path_for(rolled, engagement_state[m]["bucket"])
+        if p:
+            paths[m] = p
+    warnings: list[str] = []
+    items = list(paths.items())
+    for ma, pa in items:
+        for mb, pb in items:
+            if ma != mb and pb.startswith(pa + "."):
+                warnings.append(f"{ma} ({pa}) contains {mb} ({pb}) — sum double-counts")
+    return warnings
 
 
 # --- main ------------------------------------------------------------------
@@ -484,39 +569,73 @@ def main() -> None:
     appetite = load_appetite()
     engagement_state: dict[str, dict] = {}
     for name, cfg in appetite.items():
-        weekly_cap, monthly_cap = caps(cfg["monthly_value"], cfg["target_rate"])
-        h_today = find_hours(by_window["today"], name)
-        h_wtd   = find_hours(by_window["wtd"],   name)
-        h_7d    = find_hours(by_window["7d"],    name)
-        h_30d   = find_hours(by_window["30d"],   name)
-        engagement_state[name] = {
-            "monthly_value":  cfg["monthly_value"],
-            "target_rate":    cfg["target_rate"],
-            "weekly_cap_h":   round(weekly_cap,  2),
-            "monthly_cap_h":  round(monthly_cap, 2),
-            "today_h":        round(h_today, 2),
-            "meeting_h":      round(find_hours(meeting_wtd, name), 2),
-            "wtd": {"actual_h": round(h_wtd, 2), **remaining_or_over(h_wtd, weekly_cap)},
-            "7d":  {"actual_h": round(h_7d,  2), **remaining_or_over(h_7d,  weekly_cap)},
-            "30d": {"actual_h": round(h_30d, 2), **remaining_or_over(h_30d, monthly_cap)},
+        cfg = cfg or {}
+        bucket = cfg.get("bucket", name)          # display name may differ from the ugly leaf
+        weekly_cap, monthly_cap = engagement_caps(cfg)
+        h_today = find_hours(by_window["today"], bucket)
+        h_wtd   = find_hours(by_window["wtd"],   bucket)
+        h_7d    = find_hours(by_window["7d"],    bucket)
+        h_30d   = find_hours(by_window["30d"],   bucket)
+        st: dict = {
+            "bucket":        bucket,
+            "track_only":    weekly_cap is None and monthly_cap is None,
+            "weekly_cap_h":  round(weekly_cap,  2) if weekly_cap  is not None else None,
+            "monthly_cap_h": round(monthly_cap, 2) if monthly_cap is not None else None,
+            "today_h":       round(h_today, 2),
+            "meeting_h":     round(find_hours(meeting_wtd, bucket), 2),
+            "wtd": {"actual_h": round(h_wtd, 2)},
+            "7d":  {"actual_h": round(h_7d,  2)},
+            "30d": {"actual_h": round(h_30d, 2)},
         }
+        if "monthly_value" in cfg:  # keep rate metadata when present (informational)
+            st["monthly_value"] = cfg["monthly_value"]
+            st["target_rate"]   = cfg.get("target_rate")
+        if weekly_cap is not None:
+            st["wtd"].update(remaining_or_over(h_wtd, weekly_cap))
+            st["7d"].update(remaining_or_over(h_7d,  weekly_cap))
+        if monthly_cap is not None:
+            st["30d"].update(remaining_or_over(h_30d, monthly_cap))
+        engagement_state[name] = st
 
-    # Total billable: sum the appetite engagements (NOT every bucket).
-    total_block: dict | None = None
-    total_budget = load_total_budget()
-    if total_budget:
-        sum_today = sum(s["today_h"]      for s in engagement_state.values())
-        sum_wtd   = sum(s["wtd"]["actual_h"] for s in engagement_state.values())
-        sum_7d    = sum(s["7d"]["actual_h"]  for s in engagement_state.values())
-        sum_30d   = sum(s["30d"]["actual_h"] for s in engagement_state.values())
-        total_block = {
-            "weekly_cap_h":  total_budget["weekly_hours"],
-            "monthly_cap_h": total_budget["monthly_hours"],
-            "today_h":  round(sum_today, 2),
-            "wtd": {"actual_h": round(sum_wtd, 2), **remaining_or_over(sum_wtd, total_budget["weekly_hours"])},
-            "7d":  {"actual_h": round(sum_7d,  2), **remaining_or_over(sum_7d,  total_budget["weekly_hours"])},
-            "30d": {"actual_h": round(sum_30d, 2), **remaining_or_over(sum_30d, total_budget["monthly_hours"])},
+    # Remainder engagements (e.g. Shaner Consulting = SC parent minus its billable +
+    # Redacted/Pipeline children) — must run BEFORE groups so the roll-ups see the
+    # adjusted hours. Canonical paths come from the widest window.
+    remainder_names = [n for n, c in appetite.items() if (c or {}).get("remainder")]
+    if remainder_names:
+        canon = {n: _full_path_for(by_window["30d"], engagement_state[n]["bucket"])
+                 for n in engagement_state}
+        apply_remainder(engagement_state, canon, remainder_names)
+
+    # User-defined roll-up groups. Each sums its member engagements (NOT every
+    # bucket) against a hand-set aggregate cap. '*' = every defined engagement.
+    group_blocks: list[dict] = []
+    for g in load_groups():
+        members = (list(engagement_state.keys())
+                   if g.get("members") in ("*", ["*"])
+                   else [m for m in (g.get("members") or [])])
+        present = [m for m in members if m in engagement_state]
+        wk_cap = float(g.get("weekly_hours",  0))
+        mo_cap = float(g.get("monthly_hours", 0))
+        sum_today = sum(engagement_state[m]["today_h"]        for m in present)
+        sum_wtd   = sum(engagement_state[m]["wtd"]["actual_h"] for m in present)
+        sum_7d    = sum(engagement_state[m]["7d"]["actual_h"]  for m in present)
+        sum_30d   = sum(engagement_state[m]["30d"]["actual_h"] for m in present)
+        block = {
+            "name":          g["name"],
+            "members":       present,
+            "weekly_cap_h":  wk_cap,
+            "monthly_cap_h": mo_cap,
+            "today_h":       round(sum_today, 2),
+            "wtd": {"actual_h": round(sum_wtd, 2), **remaining_or_over(sum_wtd, wk_cap)},
+            "7d":  {"actual_h": round(sum_7d,  2), **remaining_or_over(sum_7d,  wk_cap)},
+            "30d": {"actual_h": round(sum_30d, 2), **remaining_or_over(sum_30d, mo_cap)},
         }
+        # Soft overlap guard: if one member's bucket path is an ancestor of another's,
+        # the sum double-counts. Detect via the resolved 30d paths and warn (never crash).
+        overlap = _group_overlap(present, engagement_state, by_window["30d"])
+        if overlap:
+            block["overlap"] = overlap
+        group_blocks.append(block)
 
     log_path = DEPLOY_WEEK / "data" / "session-log.md"
     last_dw = (
@@ -532,7 +651,7 @@ def main() -> None:
         "generated_at":         generated_at,
         "repo_path":            str(config.DATA_DIR),
         "windows_raw_minutes":  by_window,
-        "total":                total_block,
+        "groups":               group_blocks,
         "engagements":          engagement_state,
         "live_bucket":          None,  # filled in by Phase 2 (live_bucket.py)
         "needs_llm": {
@@ -562,8 +681,17 @@ def main() -> None:
     print(f"sessions: {len(confident_sessions)} confident, {len(needs_llm_sessions)} needs_llm")
     for name, st in engagement_state.items():
         wtd = st["wtd"]
+        if st.get("track_only"):
+            print(f"  {name:18} wtd {wtd['actual_h']:5.1f}h  (tracked, no cap)")
+            continue
         status = f"OVER {wtd['hours_over']}h" if wtd["over"] else f"{wtd['hours_left']}h left"
-        print(f"  {name:8} wtd {st['wtd']['actual_h']:5.1f}/{st['weekly_cap_h']:>4.1f}h  {status}")
+        print(f"  {name:18} wtd {wtd['actual_h']:5.1f}/{st['weekly_cap_h']:>4.1f}h  {status}")
+    for g in group_blocks:
+        wtd = g["wtd"]
+        status = f"OVER {wtd['hours_over']}h" if wtd["over"] else f"{wtd['hours_left']}h left"
+        print(f"  [{g['name']:16}] wtd {wtd['actual_h']:5.1f}/{g['weekly_cap_h']:>4.1f}h  {status}")
+        for w in g.get("overlap", []):
+            print(f"    ! overlap: {w}")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,11 @@
 # panel/render_state.py
 """Pure translation of state.json into a display-ready view model.
-No I/O, no rounding surprises — the panel HTML consumes only this shape."""
+No I/O, no rounding surprises — the panel HTML consumes only this shape.
+
+Every row carries BOTH a `week` and a `month` block (wtd vs weekly cap, 30d vs
+monthly cap) so the panel's week|month toggle switches with no recompute. Group
+rows (roll-ups) always have caps; track-only engagements carry `cap_h: null`
+with status "track" and render hours without a bar."""
 from __future__ import annotations
 
 
@@ -12,42 +17,38 @@ def _status(pct: float) -> str:
     return "under"
 
 
-def _block(d: dict, cap_h: float, today_h: float,
-           d30_actual: float, d30_cap: float) -> dict:
-    actual = d["actual_h"]
-    pct = round(actual / cap_h * 100) if cap_h else 0
+def _window(actual: float, cap: float | None) -> dict:
+    """One window's display cell. cap None/0 => track-only (no bar)."""
+    if not cap:
+        return {"actual_h": round(actual, 1), "cap_h": None, "pct": 0, "status": "track"}
+    pct = round(actual / cap * 100)
+    return {"actual_h": round(actual, 1), "cap_h": round(cap, 1), "pct": pct, "status": _status(pct)}
+
+
+def _row(name: str, blk: dict, is_group: bool) -> dict:
+    track_only = bool(blk.get("track_only")) and not is_group
     return {
-        "actual_h": round(actual, 1),
-        "cap_h": round(cap_h, 1),
-        "pct": pct,
-        "status": _status(pct),
-        "today_h": round(today_h, 1),
-        "d7_h": None,   # filled by caller (needs the 7d block)
-        "d30_actual": round(d30_actual, 1),
-        "d30_cap": round(d30_cap, 1),
+        "name": name,
+        "is_group": is_group,
+        "track_only": track_only,
+        "today_h": round(blk.get("today_h", 0) or 0, 1),
+        "d7_h": round(blk.get("7d", {}).get("actual_h", 0) or 0, 1),
+        "meeting_h": round(blk.get("meeting_h", 0) or 0, 1),
+        "week":  _window(blk.get("wtd", {}).get("actual_h", 0) or 0, blk.get("weekly_cap_h")),
+        "month": _window(blk.get("30d", {}).get("actual_h", 0) or 0, blk.get("monthly_cap_h")),
+        "overlap": blk.get("overlap") or [],
     }
 
 
-def _engagement(name: str, e: dict) -> dict:
-    blk = _block(e["wtd"], e["weekly_cap_h"], e["today_h"],
-                 e["30d"]["actual_h"], e["monthly_cap_h"])
-    blk["name"] = name
-    blk["d7_h"] = round(e["7d"]["actual_h"], 1)
-    blk["meeting_h"] = round(e.get("meeting_h", 0) or 0, 1)
-    return blk
-
-
 def build_view_model(state: dict) -> dict:
-    engagements = [_engagement(n, e) for n, e in state.get("engagements", {}).items()]
-    # over-budget first, then alphabetical
-    engagements.sort(key=lambda x: (x["status"] != "over", x["name"]))
+    engagements = [_row(n, e, False) for n, e in state.get("engagements", {}).items()]
+    # capped-over first, then other capped (alpha), then track-only (alpha)
+    engagements.sort(key=lambda x: (x["track_only"], x["week"]["status"] != "over", x["name"]))
 
-    total = None
-    t = state.get("total")
-    if t:
-        total = _block(t["wtd"], t["weekly_cap_h"], t["today_h"],
-                       t["30d"]["actual_h"], t["monthly_cap_h"])
-        total["d7_h"] = round(t["7d"]["actual_h"], 1)
+    raw_groups = state.get("groups")
+    if raw_groups is None and state.get("total"):           # legacy state.json shape
+        raw_groups = [{**state["total"], "name": "Billable"}]
+    groups = [_row(g["name"], g, True) for g in (raw_groups or [])]
 
     now = None
     lb = state.get("live_bucket")
@@ -58,7 +59,7 @@ def build_view_model(state: dict) -> dict:
     return {
         "generated_at": state.get("generated_at"),
         "repo_path": state.get("repo_path", ""),
-        "total": total,
+        "groups": groups,
         "engagements": engagements,
         "now": now,
         "uncategorized": state.get("needs_llm", {"sessions": 0, "meetings": 0}),

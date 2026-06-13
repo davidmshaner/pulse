@@ -1,19 +1,36 @@
-# Per-category time budget. Hours are the base unit; rate fields are optional
-# (when present, the cap is derived: weekly_cap = monthly_value / target_rate / 4.33).
-
-# Overall billable capacity (summed across the categories below).
-total_budget:
-  weekly_hours:  32
-  monthly_hours: 128
+# Per-engagement time budget + roll-up groups. Hand-maintained.
+#
+# An engagement is one of three flavors:
+#   rate-mode   monthly_value + target_rate  -> derived cap
+#               (weekly_cap = monthly_value / target_rate / 4.33)
+#   hours-mode  weekly_hours and/or monthly_hours -> direct cap
+#   track-only  neither -> shown and rolled up, but no cap and no bar.
+#               Use `bucket:` to map a pretty name to its registry leaf.
+#
+# Groups bundle engagements under one aggregate cap. `members: "*"` means every
+# defined engagement. (Legacy configs with a top-level `total_budget:` instead of
+# `groups:` still work — it's read as a single "Billable" group over all members.)
 
 engagements:
   ClientA:
-    weekly_hours: 8            # plain hour budget — the simplest model
+    weekly_hours: 8            # hours-mode — the simplest cap
 
   ClientB:
     weekly_hours: 6
 
   RetainerClient:
-    # Optional rate mode: enter $/mo + your target $/hr instead of hours.
-    monthly_value: 5000        # $/mo flowing from this engagement
-    target_rate:   250         # $/hr you want to hit -> derives the cap
+    monthly_value: 5000        # rate-mode — $/mo + your target $/hr derives the cap
+    target_rate:   250
+
+  Personal:
+    bucket: personal           # track-only — no cap, just visibility + roll-up
+
+groups:
+  Billable:
+    members: [ClientA, ClientB, RetainerClient]
+    weekly_hours:  20
+    monthly_hours: 86
+  "All Work":
+    members: "*"               # everything, incl. Personal
+    weekly_hours:  30
+    monthly_hours: 130

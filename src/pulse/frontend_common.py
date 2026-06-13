@@ -41,20 +41,23 @@ def title_for(state: dict | None) -> str:
         return "Pulse"
     lb = state.get("live_bucket")
     engagements = state.get("engagements", {})
+    # Only capped (billable) engagements drive the glyph — track-only rows have no
+    # over/hours_left and aren't part of the billable-governor signal.
+    capped = {n: e for n, e in engagements.items() if "over" in (e.get("wtd") or {})}
     if lb and lb.get("bucket_path"):
         leaf = lb["bucket_path"][-1]
-        if leaf in engagements:
-            wtd = engagements[leaf]["wtd"]
+        if leaf in capped:
+            wtd = capped[leaf]["wtd"]
             ab = _abbr(leaf)
             if wtd["over"]:
                 return f"⚠{ab} -{wtd['hours_over']:.0f}h"
             return f"{ab} {wtd['hours_left']:.0f}h"
-    over = [(n, e["wtd"]["hours_over"]) for n, e in engagements.items() if e["wtd"]["over"]]
+    over = [(n, e["wtd"]["hours_over"]) for n, e in capped.items() if e["wtd"]["over"]]
     if over:
         worst = max(over, key=lambda t: t[1])
         return f"⚠{_abbr(worst[0])} -{worst[1]:.0f}h"
-    if engagements:
-        total_left = sum(e["wtd"]["hours_left"] for e in engagements.values())
+    if capped:
+        total_left = sum(e["wtd"]["hours_left"] for e in capped.values())
         return f"✓ {total_left:.0f}h"
     return "Pulse"
 
@@ -65,18 +68,26 @@ def menu_lines(state: dict | None) -> list:
     items: list = []
     if state is None:
         return ["(snapshot not yet run)"]
-    total = state.get("total")
-    if total:
-        wtd, d7, d30 = total["wtd"], total["7d"], total["30d"]
+    groups = state.get("groups")
+    if groups is None and state.get("total"):          # legacy state.json shape
+        groups = [{**state["total"], "name": "Billable"}]
+    for g in groups or []:
+        wtd, d7, d30 = g["wtd"], g["7d"], g["30d"]
         dot = "● " if wtd["over"] else "  "
-        items.append(f"{dot}BILLABLE  cap {total['weekly_cap_h']:.0f}h/wk  {total['monthly_cap_h']:.0f}h/mo")
-        items.append(f"  {bar(wtd['actual_h'], total['weekly_cap_h'])}  "
-                     f"wtd {wtd['actual_h']:.1f}/{total['weekly_cap_h']:.0f}h   {fmt_period(wtd)}")
-        items.append(f"  today {total['today_h']:.1f}h  ·  7d {d7['actual_h']:.1f}h  ·  "
-                     f"30d {d30['actual_h']:.0f}/{total['monthly_cap_h']:.0f}h")
+        items.append(f"{dot}{g['name'].upper()}  cap {g['weekly_cap_h']:.0f}h/wk  {g['monthly_cap_h']:.0f}h/mo")
+        items.append(f"  {bar(wtd['actual_h'], g['weekly_cap_h'])}  "
+                     f"wtd {wtd['actual_h']:.1f}/{g['weekly_cap_h']:.0f}h   {fmt_period(wtd)}")
+        items.append(f"  today {g['today_h']:.1f}h  ·  7d {d7['actual_h']:.1f}h  ·  "
+                     f"30d {d30['actual_h']:.0f}/{g['monthly_cap_h']:.0f}h")
         items.append(None)
-    for name, eng in state["engagements"].items():
+    for name, eng in state.get("engagements", {}).items():
         wtd, d7, d30 = eng["wtd"], eng["7d"], eng["30d"]
+        if eng.get("track_only"):
+            items.append(f"  {name}  (tracked, no cap)")
+            items.append(f"  today {eng['today_h']:.1f}h  ·  7d {d7['actual_h']:.1f}h  ·  "
+                         f"30d {d30['actual_h']:.0f}h")
+            items.append(None)
+            continue
         dot = "● " if wtd["over"] else "  "
         items.append(f"{dot}{name}  cap {eng['weekly_cap_h']:.1f}h/wk  {eng['monthly_cap_h']:.0f}h/mo")
         items.append(f"  {bar(wtd['actual_h'], eng['weekly_cap_h'])}  "
