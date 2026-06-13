@@ -31,11 +31,9 @@ html,body{{width:640px;height:320px;background:var(--cream);
   font-family:'JBM',monospace;color:var(--ink);overflow:hidden;}}
 .wrap{{display:flex;width:100%;height:100%;align-items:center;padding:0 44px;gap:34px;}}
 .left{{flex:1;}}
-.mark{{font-size:62px;font-weight:600;letter-spacing:-1.5px;line-height:1;}}
-.tag{{font-size:20px;font-weight:500;margin-top:16px;line-height:1.35;max-width:330px;}}
-.rule{{width:48px;height:3px;background:var(--sage);margin:20px 0;}}
-.pillars{{display:flex;flex-direction:column;gap:7px;font-size:13px;color:var(--muted);letter-spacing:0.3px;}}
-.pillars b{{color:var(--ink);font-weight:600;}}
+.mark{{font-size:64px;font-weight:600;letter-spacing:-1.5px;line-height:1;}}
+.rule{{width:52px;height:3px;background:var(--sage);margin:22px 0 18px;}}
+.tag{{font-size:22px;font-weight:500;line-height:1.42;max-width:380px;}}
 .right{{flex-shrink:0;}}
 .right img{{width:248px;border-radius:10px;
   box-shadow:0 10px 30px rgba(45,42,38,0.16);border:1px solid #E7E3DD;}}
@@ -43,13 +41,8 @@ html,body{{width:640px;height:320px;background:var(--cream);
 <div class="wrap">
   <div class="left">
     <div class="mark">Pulse</div>
-    <div class="tag">Know where your time actually went.</div>
     <div class="rule"></div>
-    <div class="pillars">
-      <span><b>·</b> real activity, not session length</span>
-      <span><b>·</b> attributed by where files land</span>
-      <span><b>·</b> stays local &nbsp; set up by Claude</span>
-    </div>
+    <div class="tag">for Claude Code junkies who want to know where their time actually goes</div>
   </div>
   <div class="right"><img src="file://{HERO}"></div>
 </div>
