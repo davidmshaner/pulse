@@ -106,6 +106,9 @@ function renderTime(){
     foot += '<div class="foot">uncategorized: '+u.sessions+' sessions, '+u.meetings
       + ' meetings &nbsp;<span class="reslink" onclick="setView(\'resolve\')">resolve ›</span></div>';
   }
+  if(VM.overhead_sessions){
+    foot += '<div class="foot">'+VM.overhead_sessions+' overhead (no files touched)</div>';
+  }
   document.getElementById('app').innerHTML = html + foot;
 }
 

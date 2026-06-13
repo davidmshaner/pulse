@@ -26,6 +26,7 @@ STATE = {
     "meetings_wtd": 6,
     "people": [{"name": "Dana", "project": "Acme"}, {"name": "Wei", "project": "Globex"}],
     "uncategorized_detail": {"sessions": ["api.py"], "meetings": ["Acme sync"]},
+    "overhead_sessions": 5,
     "repo_path": "/Users/x/dev/pulse",
 }
 
@@ -79,6 +80,10 @@ def test_people_and_meeting_count_passthrough():
 def test_repo_path_passthrough():
     assert build_view_model(STATE)["repo_path"] == "/Users/x/dev/pulse"
     assert build_view_model({})["repo_path"] == ""
+
+def test_overhead_sessions_passthrough_and_default():
+    assert build_view_model(STATE)["overhead_sessions"] == 5
+    assert build_view_model({})["overhead_sessions"] == 0
 
 def test_uncategorized_detail_passthrough_and_default():
     vm = build_view_model(STATE)

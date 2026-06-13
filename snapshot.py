@@ -349,6 +349,15 @@ def _meeting_brief(m: dict) -> dict:
     }
 
 
+def is_overhead_session(s: dict) -> bool:
+    """A needs_llm session with no file edits has no 'where work landed' signal,
+    and its directory didn't resolve to a project either — unattributable overhead
+    (exploration, Q&A like 'do I have tokens?'), not billable to any one project.
+    These are reported separately, never dumped into the resolve queue."""
+    edits = s.get("edit_paths") or {}
+    return not (isinstance(edits, dict) and edits)
+
+
 def write_uncategorized(sessions: list[dict], meetings: list[dict],
                         generated_at: str) -> None:
     """Dump the unresolved work so `setup/RESOLVE.md` (run in Claude Code) can
@@ -447,6 +456,9 @@ def main() -> None:
 
     confident_sessions = prematch["confident"]["sessions"]
     needs_llm_sessions = prematch["needs_llm"]["sessions"]
+    # Split unattributable overhead (no file edits) from genuinely-resolvable sessions.
+    overhead_sessions = [s for s in needs_llm_sessions if is_overhead_session(s)]
+    resolvable_sessions = [s for s in needs_llm_sessions if not is_overhead_session(s)]
 
     # Cowork sessions live outside ~/.claude/projects/. The scanner normalizes
     # them into the CLI session shape and pre-classifies via slash command /
@@ -514,7 +526,7 @@ def main() -> None:
 
     generated_at = datetime.now(LOCAL_TZ).isoformat(timespec="seconds")
     # Dump the unresolved work for setup/RESOLVE.md (run in Claude Code) to act on.
-    write_uncategorized(needs_llm_sessions, unresolved_meetings, generated_at)
+    write_uncategorized(resolvable_sessions, unresolved_meetings, generated_at)
 
     state = {
         "generated_at":         generated_at,
@@ -524,10 +536,11 @@ def main() -> None:
         "engagements":          engagement_state,
         "live_bucket":          None,  # filled in by Phase 2 (live_bucket.py)
         "needs_llm": {
-            "sessions": len(needs_llm_sessions),
+            "sessions": len(resolvable_sessions),
             "meetings": still_unresolved_meetings,
         },
-        "uncategorized_detail": uncategorized_detail(needs_llm_sessions, unresolved_meetings),
+        "overhead_sessions": len(overhead_sessions),
+        "uncategorized_detail": uncategorized_detail(resolvable_sessions, unresolved_meetings),
         "meeting_breakdown": {
             "total_resolved": len(meetings),
             "soft_resolved": sum(1 for m in meetings if m.get("reason") == "soft_resolved_unambig_co_attendee"),
