@@ -16,7 +16,7 @@ projects_dirs:
 # --- Advanced overrides (optional) ---------------------------------------
 # By default these resolve to the vendored copies / repo-local files in THIS
 # clone, regardless of where you cloned it. Set them only to point elsewhere.
-# timecore_dir: <path to a timecore checkout>      # default: ./timecore (vendored)
+# timecore_dir: <path to a timecore checkout>      # default: src/pulse/timecore (vendored)
 # registry:     <path to your bucket-registry.yaml> # default: ./bucket-registry.yaml
 # learnings:    <path to your learnings.yaml>       # default: ./learnings.yaml
 # rules:        <path to your disambiguation-rules.yaml> # default: ./disambiguation-rules.yaml
