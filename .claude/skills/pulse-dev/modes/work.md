@@ -14,9 +14,12 @@ wait. Once he confirms, run to an open PR without pausing at each step. **Always
 (A directly-given target is the confirm.) A plan deviation mid-flight (skip/defer/reorder a planned
 task) is a stop-and-ask, never a silent judgment call.
 
+> **Board columns:** Backlog → Up Next → In Progress → In Review → QA → Done (same 6 as every
+> harness board). David promotes Backlog → Up Next; this mode moves the card the rest of the way.
+
 ## 1. Pick (only when no target was given) — gate
-List the board's **In Progress** column (David promotes Backlog → In Progress, so In Progress is the
-ready queue), propose ONE issue, read its body:
+List the board's **Up Next** column (David promotes Backlog → Up Next, so Up Next is the ready
+queue), propose ONE issue, read its body:
 ```bash
 gh auth switch --user shanerconsulting >/dev/null 2>&1
 gh issue list --repo shanerconsulting/pulse --state open --json number,title,labels \
@@ -34,8 +37,8 @@ Present the issue + one-line plan, **wait for the confirm.**
 git worktree add .worktrees/issue-<n> -b issue-<n>
 ```
 Pulse keeps worktrees under the gitignored `.worktrees/`. Parallel agents each take a distinct issue;
-no shared `main`. Move the board item to **In Progress** if it isn't already (usually David did at
-triage; with the bootstrap automations, opening a PR that `Closes #<n>` also advances it).
+no shared `main`. **Move the board card from Up Next to `In Progress` as your first action** (board =
+truthful real-time record; stops two agents grabbing one card).
 
 ## 3. Build — the superpowers stack, sized to the work
 | Work shape | superpowers skill |
@@ -54,12 +57,14 @@ a **far QA boundary**, run the actual app and read the menu-bar card to verify t
 user path. Full procedure: **`qa.md`**. The `pytest` gate + the app read together are the closing
 gate of this step.
 
-## 5. PR → review → merge
-Open a PR against `main`, `Closes #<n>`. **Review before merge** — `/code-review`, or dispatch a
-fresh diff-only review subagent (agent-authored work should not merge unreviewed). Fix the real
-findings. On merge: board item → **Done** (the bootstrap automation does this on merge; verify it
-landed), then `git worktree remove .worktrees/issue-<n>`. Conventions (branch+PR+worktree, the
-shanerconsulting account rule, run/reinstall) live in `../process/conventions.md`.
+## 5. PR → In Review → QA → Done
+Open a PR against `main`, `Closes #<n>`, and **move the card to `In Review`**. **Review before
+merge** — `/code-review`, or dispatch a fresh diff-only review subagent (agent-authored work should
+not merge unreviewed). Fix the real findings. Run the app (`--qa`) to verify on the real path and
+**move the card to `QA`**. On merge: card → **Done** (the bootstrap PR-merged automation does this;
+verify it landed), then `git worktree remove .worktrees/issue-<n>`. Every open PR lives on the board
+(In Review) — never an off-board PR. Conventions (branch+PR+worktree, the shanerconsulting account
+rule, run/reinstall) live in `../process/conventions.md`.
 
 ## 6. Compounding feedback
 Before closing, ask: did I have to discover anything the issue should have carried (a repro, a file

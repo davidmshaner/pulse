@@ -49,7 +49,8 @@ Pick exactly ONE type label:
 | Refactor / debt paydown / known-shortcut cleanup | `tech-debt` |
 
 The issue body names the area (menu-bar card, time accounting, session scan, cowork scan, calendar,
-config, install) — no component labels. Column is always **Backlog** (David triages → In Progress).
+config, install) — no component labels. Column is always **Backlog** (David triages Backlog → Up
+Next; the board carries the 6 stages Backlog → Up Next → In Progress → In Review → QA → Done).
 
 ### 5. Draft + CONFIRM (hard gate)
 Assemble a fields JSON (schema below) and run the script `--dry-run`; show the rendered body +
