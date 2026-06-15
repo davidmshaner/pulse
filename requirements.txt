@@ -12,3 +12,12 @@ PyYAML==6.0.2
 pyobjc-core==11.1
 pyobjc-framework-Cocoa==11.1
 pyobjc-framework-WebKit==11.1
+# Calendar fetch (src/pulse/fetch_meetings.py). Required whenever a calendar is
+# configured in config.yaml; harmless otherwise — the fetch guards at runtime (no
+# accounts → empty meetings), so presence of these does not force calendar use.
+# Without them the LaunchAgent's .venv can't import the Google client, so every
+# meeting silently drops from the totals (issue #26). Pinned to versions verified
+# on system Python 3.9.6.
+google-auth==2.50.0
+google-auth-oauthlib==1.3.1
+google-api-python-client==2.197.0
