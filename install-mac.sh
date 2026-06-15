@@ -38,8 +38,29 @@ if [ "${1:-}" = "--check" ]; then
 fi
 
 mkdir -p "$REPO/.cache"
-# Ensure runtime deps (WebKit powers the designed popover panel).
-/usr/bin/python3 -m pip install --user --quiet rumps pyyaml "pyobjc-framework-WebKit==11.1" || true
+
+# Dependencies go in a repo-local venv built from the system python, so the
+# interpreter that installs them is the exact one the LaunchAgent runs — no
+# Homebrew/PEP-668 mismatch, and pyobjc is pinned to prebuilt-wheel versions
+# (no clang source build on system Python 3.9). Failures are NOT swallowed: a
+# broken dep install stops here with a clear error instead of surfacing later
+# as a launch crash-loop.
+if ! /usr/bin/python3 -c 'import sys' >/dev/null 2>&1; then
+  echo "ERROR: /usr/bin/python3 is not usable. Install the macOS Command Line Tools" >&2
+  echo "       (run: xcode-select --install) and re-run  bash install-mac.sh" >&2
+  exit 1
+fi
+# Build the venv only when it's missing or its interpreter is broken — e.g. a
+# macOS python upgrade can orphan a previous venv, leaving a dangling symlink.
+# A healthy venv is reused; deps are (re)synced every run (a fast no-op when
+# already satisfied). No `pip install --upgrade pip`: the venv's bundled pip
+# installs the pinned wheels fine, and self-upgrading pip is an unpinned,
+# network-dependent step that would now abort the whole install on failure.
+if ! "$REPO/.venv/bin/python3" -c 'import sys' >/dev/null 2>&1; then
+  /usr/bin/python3 -m venv --clear "$REPO/.venv"
+fi
+"$REPO/.venv/bin/python3" -m pip install --quiet -r "$REPO/requirements.txt"
+
 cat > "$PLIST" <<PLISTEOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -47,7 +68,7 @@ cat > "$PLIST" <<PLISTEOF
 <dict>
   <key>Label</key><string>com.pulse.menubar</string>
   <key>ProgramArguments</key>
-  <array><string>/usr/bin/python3</string><string>-u</string><string>$REPO/src/pulse/app.py</string></array>
+  <array><string>$REPO/.venv/bin/python3</string><string>-u</string><string>$REPO/src/pulse/app.py</string></array>
   <key>WorkingDirectory</key><string>$REPO</string>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>

@@ -8,15 +8,17 @@
 - **Run (foreground)** for a quick look: `python3 src/pulse/app.py` (Ctrl-C to stop).
 - **Run (installed)** — the shipped path is a per-user **LaunchAgent** (`com.pulse.menubar`):
   ```bash
-  ./install-mac.sh                                   # (re)install + start; pip-installs rumps/pyyaml/pyobjc-WebKit
+  ./install-mac.sh                                   # (re)install + start; builds .venv from requirements.txt
   launchctl kickstart -k "gui/$(id -u)/com.pulse.menubar"   # restart after a code change
   ```
 - **Logs:** `.cache/pulse.stdout.log` / `.cache/pulse.stderr.log`. A rumps app that dies on launch
   shows the traceback there.
 - **State / config:** `state.json`, `config.yaml`, `appetite.yaml` (per-project budgets) at the repo
   root; `src/pulse/config.py` owns `PKG_DIR` / `DATA_DIR`.
-- **Deps:** Python 3 (`/usr/bin/python3`), `rumps`, `pyyaml`, `pyobjc-framework-WebKit` (the WebKit
-  popover panel) — installed `--user` by `install-mac.sh`.
+- **Deps:** `rumps`, `pyyaml`, `pyobjc` (the WebKit popover panel), pinned in `requirements.txt`.
+  `install-mac.sh` builds a repo-local **`.venv`** from `/usr/bin/python3` and installs them there,
+  and the LaunchAgent runs `.venv/bin/python3` — so install-time and runtime share one interpreter
+  (issue #15; do not revert to a `--user` system-python install).
 
 ## Branch + account discipline
 - **Every change is branch + PR + worktree** — no direct commits to `main`. One worktree per issue

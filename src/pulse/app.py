@@ -85,7 +85,11 @@ class AppDelegate(NSObject):
     # --- snapshot ---------------------------------------------------------
     def _run_snapshot(self) -> None:
         try:
-            subprocess.run(["/usr/bin/python3", str(SNAPSHOT_SCRIPT)],
+            # sys.executable, not a hardcoded /usr/bin/python3: the LaunchAgent runs
+            # app.py under the repo's .venv, so snapshot must run there too — the venv
+            # is where the deps live. snapshot.py then propagates sys.executable to its
+            # own children, keeping the whole pipeline on one interpreter.
+            subprocess.run([sys.executable, str(SNAPSHOT_SCRIPT)],
                            check=True, capture_output=True, timeout=120)
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
             pass

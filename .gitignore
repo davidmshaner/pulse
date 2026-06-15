@@ -17,3 +17,6 @@ panel/_*.html
 uncategorized.json
 uncategorized.tmp
 .worktrees/
+
+# Python venv created by install-mac.sh (deps for the LaunchAgent)
+.venv/

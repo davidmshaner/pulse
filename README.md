@@ -54,12 +54,14 @@ macOS gets the designed panel (a menu-bar card). Windows runs an always-on-top o
 <details>
 <summary>Manual setup (without Claude Code)</summary>
 
-1. `pip3 install rumps pyyaml pyobjc-framework-WebKit` (macOS) or `pip install pyyaml` (Windows).
-2. `cp examples/config.example.yaml config.yaml` and edit the machine values (timezone, projects_dirs).
-3. `cp examples/bucket-registry.example.yaml bucket-registry.yaml` and map your repo roots to categories.
-4. `cp examples/appetite.example.yaml appetite.yaml` and set per-category hour budgets (or rates).
-5. `python3 src/pulse/snapshot.py` to verify, then `bash install-mac.sh` to run it at login. (Clone
-   outside `~/Documents` / `~/Desktop` / `~/Downloads` / iCloud Drive / `~/Library/CloudStorage` —
+1. `cp examples/config.example.yaml config.yaml` and edit the machine values (timezone, projects_dirs).
+2. `cp examples/bucket-registry.example.yaml bucket-registry.yaml` and map your repo roots to categories.
+3. `cp examples/appetite.example.yaml appetite.yaml` and set per-category hour budgets (or rates).
+4. **macOS:** `bash install-mac.sh` — builds a repo-local `.venv` from the system
+   `python3` with the pinned deps (rumps, pyyaml, pyobjc; WebKit powers the popover) and
+   registers the LaunchAgent. Verify with `.venv/bin/python3 src/pulse/snapshot.py`.
+   **Windows:** `pip install pyyaml`, `python3 src/pulse/snapshot.py` to verify, then `install.ps1`.
+   (Clone outside `~/Documents` / `~/Desktop` / `~/Downloads` / iCloud Drive / `~/Library/CloudStorage` —
    `install-mac.sh` refuses those, as macOS TCC blocks the LaunchAgent from reading them. Run
    `bash install-mac.sh --check` to preflight a location without installing.)
 

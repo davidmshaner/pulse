@@ -50,20 +50,25 @@ them), and `cowork_root` only if discovery found a non-default location. Leave
 (omit them). These files (`config.yaml`, `bucket-registry.yaml`, `appetite.yaml`)
 are gitignored — they hold the user's real data and never get pushed.
 
-## 6. Install deps + verify
-- `pip3 install rumps pyyaml pyobjc-framework-WebKit` (macOS — WebKit powers the
-  designed popover panel) or `pip install pyyaml` (Windows).
-- Run `python3 src/pulse/snapshot.py`. Show the user the per-engagement summary it prints.
-  Confirm the categories + hours look right. If a category is missing or
-  mis-bucketed, revisit step 2's registry mapping and re-run.
-
-## 7. Launch at login
-- **macOS:** `bash install-mac.sh` (registers a LaunchAgent and starts the menu
-  bar app).
-- **Windows:** run `powershell -ExecutionPolicy Bypass -File install.ps1` (registers a
-  Task Scheduler "at logon" task running the overlay with `pythonw`, and starts it now).
-  The overlay is a small always-on-top window — click it to expand the breakdown, drag to
+## 6. Install
+- **macOS:** `bash install-mac.sh`. It builds a repo-local `.venv` from the system
+  `python3` with the pinned deps (rumps, pyyaml, pyobjc — WebKit powers the designed
+  popover panel), registers the LaunchAgent, and starts the app. The venv keeps the
+  install-time and runtime interpreter identical, so the app can't crash-loop on a
+  missing module. The clone must live outside `~/Documents` / `~/Desktop` /
+  `~/Downloads` / iCloud Drive / `~/Library/CloudStorage` (macOS TCC blocks the
+  LaunchAgent from reading those) — the installer refuses them; `bash install-mac.sh
+  --check` preflights a location without installing.
+- **Windows:** `pip install pyyaml`, then `powershell -ExecutionPolicy Bypass -File install.ps1`
+  (registers a Task Scheduler "at logon" task running the overlay with `pythonw`, and starts it
+  now). The overlay is a small always-on-top window — click it to expand the breakdown, drag to
   move, right-click to quit.
+
+## 7. Verify
+- Run `.venv/bin/python3 src/pulse/snapshot.py` (macOS) or `python3 src/pulse/snapshot.py`
+  (Windows). Show the user the per-engagement summary it prints. Confirm the categories +
+  hours look right. If a category is missing or mis-bucketed, revisit step 2's registry
+  mapping and re-run.
 
 ## Done
 Tell the user Pulse is running (macOS) or configured (Windows), and that they can
