@@ -1,0 +1,14 @@
+# Pulse menu-bar app dependencies. install-mac.sh installs these into a repo-local
+# .venv built from /usr/bin/python3 (macOS system Python 3.9), so the interpreter
+# that installs them is the exact one the LaunchAgent runs.
+#
+# The pyobjc pins are LOAD-BEARING: 11.1 is the version with prebuilt cp39 wheels
+# (verified on system Python 3.9.6); leaving it unpinned can pull a release with no
+# wheel, which then builds pyobjc-core from source and dies with clang errors.
+# rumps/PyYAML pins are just the current known-good versions (not wheel-constrained)
+# — safe to bump.
+rumps==0.4.0
+PyYAML==6.0.2
+pyobjc-core==11.1
+pyobjc-framework-Cocoa==11.1
+pyobjc-framework-WebKit==11.1
