@@ -8,21 +8,29 @@ Run: /usr/bin/python3 panel_app.py
 """
 from __future__ import annotations
 
-import json
-import subprocess
-import threading
+import sys
 from pathlib import Path
-
-import AppKit
-import WebKit
-import objc
-from Foundation import NSObject, NSMakeRect, NSMakeSize, NSURL, NSTimer
 
 PKG_DIR = Path(__file__).resolve().parent
 SNAPSHOT_SCRIPT = PKG_DIR / "snapshot.py"
-
-import sys
 sys.path.insert(0, str(PKG_DIR))
+
+# Preflight BEFORE the heavy pyobjc imports below: if a dep is missing or the
+# working dir is unreadable, emit one clear line instead of a raw traceback into a
+# KeepAlive crash loop. `--selftest` runs the checks and exits without starting the
+# app. preflight is stdlib-only, so it imports even when the real deps are absent.
+import preflight  # noqa: E402
+preflight.run_or_exit(working_dir=PKG_DIR.parents[1], selftest="--selftest" in sys.argv)
+
+import json          # noqa: E402
+import subprocess    # noqa: E402
+import threading     # noqa: E402
+
+import AppKit        # noqa: E402
+import WebKit        # noqa: E402
+import objc          # noqa: E402
+from Foundation import NSObject, NSMakeRect, NSMakeSize, NSURL, NSTimer  # noqa: E402
+
 import config                                          # noqa: E402
 from panel.render_state import build_view_model       # noqa: E402
 from panel.render_html import write_rendered, RENDERED_PATH  # noqa: E402
