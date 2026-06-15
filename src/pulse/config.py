@@ -62,8 +62,6 @@ COWORK_ROOT = _resolve(_cr) if _cr else _default_cowork_root()
 # (clone-location independent); an explicit config value overrides it.
 TIMECORE_DIR = _resolve(_cfg["timecore_dir"]) if _cfg.get("timecore_dir") else PKG_DIR / "timecore"
 
-DEPLOY_WEEK = _resolve(_cfg.get("deploy_week_dir", ".claude/skills/deploy-week"))
-SCRIPTS = DEPLOY_WEEK / "scripts"
 # Categorization inputs default to the repo-local files (standalone). An explicit
 # config value (e.g. David pointing at his deploy-week context) overrides.
 REGISTRY = _resolve(_cfg["registry"]) if _cfg.get("registry") else DATA_DIR / "bucket-registry.yaml"

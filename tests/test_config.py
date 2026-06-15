@@ -9,10 +9,12 @@ sys.path.insert(0, str(WIDGET))
 import config  # noqa: E402
 
 
-def test_projects_dirs_includes_private_tmp():
-    names = {p.name for p in config.PROJECTS_DIRS}
-    assert "projects" in names, config.PROJECTS_DIRS
-    assert "-private-tmp" in names, config.PROJECTS_DIRS
+def test_projects_dirs_resolve_absolute():
+    # Portable contract: every configured projects dir resolves to an absolute
+    # path (relative entries resolve against home). No machine-specific dir asserted.
+    assert config.PROJECTS_DIRS, "expected at least one projects dir"
+    for p in config.PROJECTS_DIRS:
+        assert p.is_absolute(), p
 
 
 def test_cowork_root_is_local_agent_sessions():
@@ -30,9 +32,14 @@ def test_timecore_dir_importable():
     from classify import walk_registry  # noqa: F401
 
 
-def test_deploy_week_paths_exist():
-    assert config.REGISTRY.exists(), config.REGISTRY
-    assert config.SCRIPTS.is_dir(), config.SCRIPTS
+def test_categorization_inputs_decoupled_from_deploy_week():
+    # Standalone contract: registry/learnings/rules resolve to absolute paths
+    # (repo-local by default, user-overridable), and config no longer hardcodes a
+    # deploy-week checkout. A clean clone has neither SCRIPTS nor DEPLOY_WEEK.
+    for p in (config.REGISTRY, config.LEARNINGS, config.RULES):
+        assert p.is_absolute(), p
+    assert not hasattr(config, "DEPLOY_WEEK"), "config still exposes DEPLOY_WEEK"
+    assert not hasattr(config, "SCRIPTS"), "config still exposes SCRIPTS"
 
 
 def test_calendar_config_shape():

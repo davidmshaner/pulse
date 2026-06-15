@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """snapshot.py — pulse widget state builder.
 
-Runs the deploy-week pipeline (scan, fetch, prematch) for the widest window
+Runs the vendored pipeline (scan, fetch, prematch) for the widest window
 (30d), then computes per-engagement even-split hours for today / 7d / 30d.
 Compares against appetite.yaml caps and writes state.json atomically.
 
@@ -23,7 +23,6 @@ sys.path.insert(0, str(PKG_DIR))
 import config  # noqa: E402
 import scan_cowork  # noqa: E402
 
-DEPLOY_WEEK = config.DEPLOY_WEEK          # only used for registry/learnings/rules DATA paths
 SCRIPTS = config.PKG_DIR                   # vendored scan_sessions/prematch/fetch_meetings live here
 APPETITE = config.DATA_DIR / "appetite.yaml"
 STATE = config.DATA_DIR / "state.json"
@@ -85,12 +84,12 @@ def iso_tz(dt: datetime) -> str:
     return dt.isoformat(timespec="seconds")
 
 
-# --- pipeline (subprocess wrappers around deploy-week scripts) -------------
+# --- pipeline (subprocess wrappers around the vendored src/pulse scripts) ---
 
 def run_scan(start: datetime, end: datetime) -> Path:
     out = CACHE / "sessions.json"
     subprocess.run(
-        ["python3", str(SCRIPTS / "scan_sessions.py"),
+        [sys.executable, str(SCRIPTS / "scan_sessions.py"),
          "--start", iso_naive(start),
          "--end",   iso_naive(end),
          "--out",   str(out)],
@@ -106,7 +105,7 @@ def run_fetch_meetings(start: datetime, end: datetime) -> Path:
     out = CACHE / "meetings.json"
     try:
         subprocess.run(
-            ["python3", str(SCRIPTS / "fetch_meetings.py"),
+            [sys.executable, str(SCRIPTS / "fetch_meetings.py"),
              "--start", iso_tz(start),
              "--end",   iso_tz(end),
              "--out",   str(out)],
@@ -121,12 +120,12 @@ def run_fetch_meetings(start: datetime, end: datetime) -> Path:
 def run_prematch(sessions_path: Path, meetings_path: Path) -> dict:
     out = CACHE / "prematch.json"
     subprocess.run(
-        ["python3", str(SCRIPTS / "prematch.py"),
+        [sys.executable, str(SCRIPTS / "prematch.py"),
          "--sessions",  str(sessions_path),
          "--meetings",  str(meetings_path),
-         "--registry",  str(DEPLOY_WEEK / "context" / "bucket-registry.yaml"),
-         "--learnings", str(DEPLOY_WEEK / "context" / "learnings.yaml"),
-         "--rules",     str(DEPLOY_WEEK / "context" / "disambiguation-rules.yaml"),
+         "--registry",  str(config.REGISTRY),
+         "--learnings", str(config.LEARNINGS),
+         "--rules",     str(config.RULES),
          "--out",       str(out)],
         check=True, capture_output=True,
     )
@@ -554,7 +553,7 @@ def main() -> None:
     all_sessions = confident_sessions + cowork_sessions
 
     # Load learnings for soft meeting resolution
-    with open(DEPLOY_WEEK / "context" / "learnings.yaml") as f:
+    with open(config.LEARNINGS) as f:
         learnings = yaml.safe_load(f) or {}
     meetings, unresolved_meetings = all_resolved_meetings(prematch, learnings)
     still_unresolved_meetings = len(unresolved_meetings)
@@ -637,11 +636,10 @@ def main() -> None:
             block["overlap"] = overlap
         group_blocks.append(block)
 
-    log_path = DEPLOY_WEEK / "data" / "session-log.md"
-    last_dw = (
-        datetime.fromtimestamp(log_path.stat().st_mtime, tz=LOCAL_TZ).isoformat(timespec="seconds")
-        if log_path.exists() else None
-    )
+    # Standalone has no deploy-week checkout, so there's no "last /deploy-week run"
+    # timestamp to read. The key is kept (None) for state.json shape stability; no
+    # frontend currently surfaces it.
+    last_dw = None
 
     generated_at = datetime.now(LOCAL_TZ).isoformat(timespec="seconds")
     # Dump the unresolved work for setup/RESOLVE.md (run in Claude Code) to act on.
