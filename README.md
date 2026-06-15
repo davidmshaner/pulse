@@ -40,7 +40,9 @@ cloud, no account, no telemetry. Your session logs never leave your machine.
 
 ## Claude sets it up
 
-You don't configure it. Clone the repo, open it in Claude Code, and paste:
+You don't configure it. Clone the repo (somewhere **outside** `~/Documents`, `~/Desktop`,
+`~/Downloads`, and iCloud Drive — macOS TCC blocks the background app from reading those, so it
+would crash-loop; `~/pulse` or `~/dev/pulse` is fine), open it in Claude Code, and paste:
 
 > Read `setup/SKILL.md` and set up Pulse for me.
 
@@ -56,7 +58,10 @@ macOS gets the designed panel (a menu-bar card). Windows runs an always-on-top o
 2. `cp examples/config.example.yaml config.yaml` and edit the machine values (timezone, projects_dirs).
 3. `cp examples/bucket-registry.example.yaml bucket-registry.yaml` and map your repo roots to categories.
 4. `cp examples/appetite.example.yaml appetite.yaml` and set per-category hour budgets (or rates).
-5. `python3 src/pulse/snapshot.py` to verify, then `bash install-mac.sh` to run it at login.
+5. `python3 src/pulse/snapshot.py` to verify, then `bash install-mac.sh` to run it at login. (Clone
+   outside `~/Documents` / `~/Desktop` / `~/Downloads` / iCloud Drive / `~/Library/CloudStorage` —
+   `install-mac.sh` refuses those, as macOS TCC blocks the LaunchAgent from reading them. Run
+   `bash install-mac.sh --check` to preflight a location without installing.)
 
 </details>
 
