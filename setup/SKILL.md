@@ -42,15 +42,36 @@ work. If so, capture slash-command / sender-email / title→category hints into
 `config.yaml`'s `cowork_classification` (shape in `examples/config.example.yaml`). Skip if
 they don't use Cowork — those sessions just won't be classified.
 
-## 5. Write config.yaml
+## 5. (Optional) Calendar
+Pulse can count meeting time toward each engagement. It does **not** run its own
+login — it reuses existing Google OAuth credential files (the kind
+`google_workspace_mcp` writes, or a hand-rolled integration). Discovery's
+`calendar_cred_candidates` lists any it found by shape (a `*.json` with a token)
+under `~/.google_workspace_mcp`.
+- If candidates were found, show their tags and ask which (if any) to wire in.
+- **Do NOT assume the user has none when the list is empty** — many people (e.g.
+  hand-rolled GWS setups) keep creds in a custom dir. Ask whether they have a
+  credentials directory elsewhere; if they give a path, validate it with
+  `python3 -c "import sys; sys.path.insert(0,'setup'); import discover; print(discover.validate_cred_dir('<path>'))"`
+  before using it.
+- For each account they want, note `{tag: <short label>, credentials_dir: <path>}`
+  and ask for their own email address(es) (so they're filtered out of co-attendee
+  counts). These get written in step 6.
+- If they have no creds and don't want to set any up, leave calendar empty — Pulse
+  runs sessions + Cowork only, and they can add it later by editing `config.yaml`.
+
+## 6. Write config.yaml
 Copy `examples/config.example.yaml` → `config.yaml`. Set `timezone` (ask, or infer from the
 system), `projects_dirs` (from discovery; add extra dirs only if the user names
-them), and `cowork_root` only if discovery found a non-default location. Leave
+them), and `cowork_root` only if discovery found a non-default location. If the user
+wired calendar in step 5, set `calendar.accounts` (each `{tag, credentials_dir}` —
+use a home-relative path when it's under home, matching the example) and
+`calendar.self_emails`; otherwise leave them empty. Leave
 `timecore_dir` / `registry` / `learnings` / `rules` as the repo-local defaults
 (omit them). These files (`config.yaml`, `bucket-registry.yaml`, `appetite.yaml`)
 are gitignored — they hold the user's real data and never get pushed.
 
-## 6. Install
+## 7. Install
 - **macOS:** `bash install-mac.sh`. It builds a repo-local `.venv` from the system
   `python3` with the pinned deps (rumps, pyyaml, pyobjc — WebKit powers the designed
   popover panel), registers the LaunchAgent, and starts the app. The venv keeps the
@@ -64,7 +85,7 @@ are gitignored — they hold the user's real data and never get pushed.
   now). The overlay is a small always-on-top window — click it to expand the breakdown, drag to
   move, right-click to quit.
 
-## 7. Verify
+## 8. Verify
 - Run `.venv/bin/python3 src/pulse/snapshot.py` (macOS) or `python3 src/pulse/snapshot.py`
   (Windows). Show the user the per-engagement summary it prints. Confirm the categories +
   hours look right. If a category is missing or mis-bucketed, revisit step 2's registry
