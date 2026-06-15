@@ -27,6 +27,13 @@ gh issue list --repo shanerconsulting/pulse --state open --json number,title,lab
 gh issue view <n> --repo shanerconsulting/pulse --json number,title,labels,body
 gh auth switch --user <prior-account> >/dev/null 2>&1
 ```
+**Cluster + dependency scan first.** Before proposing, group Up Next by what cards *touch* (same
+files/subsystem) and order each cluster by dependency (foundational change before the thing built on
+it; root-cause bug before its safety-net). This drives the pick — take the foundational card of the
+ripest cluster — and feeds the parallelization rule in **Concurrency** (same-cluster cards collide on
+shared files). It also catches queue pollution: a card whose body reads as already-done (past-tense,
+no label) is **triage-to-close, not work** — surface it, don't build it.
+
 Priority: a `bug` outranks `enhancement`/`feature`; a ripe issue (spec/repro in the body, no open
 question) outranks one needing design. State WHY it's the pick and that it's your judgment. **No
 eligible issue?** Say so; offer to pull from Backlog or file one via `--issue`. Don't invent work.
@@ -73,7 +80,9 @@ issue of that shape carries it cold. If nothing was missing, say so; don't manuf
 
 ## Concurrency (thin)
 Worktrees isolate your files, and parallel agents take distinct issues, so collisions are rare.
-Still: before merging, `git fetch origin main && git diff --stat origin/main..HEAD` — the diff should
+**But never hand two cards from the same cluster (per the Pick scan — they edit shared files) to
+parallel agents; serialize a cluster, parallelize across clusters.** That same-file overlap is how
+#12/#17 collided. Still: before merging, `git fetch origin main && git diff --stat origin/main..HEAD` — the diff should
 be only your files; if not, rebase onto fresh `origin/main` first. If another agent is live, read it
 before merging (`--tail`, see `tail.md`). There is no shared deploy/prod target to serialize —
 `main` is the only shared resource.
