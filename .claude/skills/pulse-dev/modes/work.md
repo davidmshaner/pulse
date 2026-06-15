@@ -14,6 +14,12 @@ wait. Once he confirms, run to an open PR without pausing at each step. **Always
 (A directly-given target is the confirm.) A plan deviation mid-flight (skip/defer/reorder a planned
 task) is a stop-and-ask, never a silent judgment call.
 
+**Frame every stop as stated intent, not a question.** At each gate, say what you intend to do and
+invite a veto — "I intend to ship #9 — stop me if not", not "want me to ship #9?". The default is
+forward motion; silence means proceed. This keeps you driving the loop instead of parking it on
+David for permission at every step. Applies to all three gates: the issue-selection stop, any
+mid-flight plan deviation, and the always-stop-before-merge gate.
+
 > **Board columns:** Backlog → Up Next → In Progress → In Review → QA → Done (same 6 as every
 > harness board). David promotes Backlog → Up Next; this mode moves the card the rest of the way.
 
@@ -37,7 +43,8 @@ no label) is **triage-to-close, not work** — surface it, don't build it.
 Priority: a `bug` outranks `enhancement`/`feature`; a ripe issue (spec/repro in the body, no open
 question) outranks one needing design. State WHY it's the pick and that it's your judgment. **No
 eligible issue?** Say so; offer to pull from Backlog or file one via `--issue`. Don't invent work.
-Present the issue + one-line plan, **wait for the confirm.**
+Present the issue + one-line plan as stated intent — **"I intend to work #<n> — stop me if not"** —
+and wait for the veto window to pass (a directly-given target already cleared this gate).
 
 ## 2. Isolate — a worktree per issue
 ```bash
