@@ -27,6 +27,17 @@ def test_requirements_pins_app_deps():
         assert pkg in text, f"{pkg} must be pinned in requirements.txt"
 
 
+def test_requirements_pins_calendar_deps():
+    # The calendar fetch (fetch_meetings.py) imports the Google client only when a
+    # calendar is configured. If those libs aren't in requirements.txt, the
+    # LaunchAgent's .venv can't import them and every meeting silently drops from
+    # the totals (#26). They must be pinned here so a reinstall can't lose them.
+    text = REQS.read_text()
+    for pkg in ("google-auth==", "google-auth-oauthlib==",
+                "google-api-python-client=="):
+        assert pkg in text, f"{pkg} must be pinned in requirements.txt (calendar fetch, #26)"
+
+
 def test_installer_builds_venv_from_system_python():
     assert "/usr/bin/python3 -m venv" in INSTALLER, "venv must be built from system python3"
     assert "requirements.txt" in INSTALLER, "deps must install from requirements.txt"
