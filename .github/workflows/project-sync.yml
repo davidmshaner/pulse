@@ -8,6 +8,11 @@
 # it as the repo secret ADD_TO_PROJECT_PAT:
 #   gh secret set ADD_TO_PROJECT_PAT --repo shanerconsulting/pulse
 # Until the secret exists the add step is skipped (no failed runs).
+#
+# NOTE: the secret is mapped to a job-level env var and the skip-guard checks `env`, NOT
+# `secrets`. GitHub Actions does NOT allow the `secrets` context in an `if:` expression — doing
+# so makes the whole workflow file invalid, so EVERY push failed at parse time (no step logs)
+# and spammed failure emails. `env` IS allowed in a step `if`, so this guard actually skips.
 name: project-sync
 on:
   issues:
@@ -17,10 +22,12 @@ on:
 jobs:
   add-to-project:
     runs-on: ubuntu-latest
+    env:
+      PAT: ${{ secrets.ADD_TO_PROJECT_PAT }}
     steps:
       - name: Add issue/PR to the Pulse board
-        if: ${{ secrets.ADD_TO_PROJECT_PAT != '' }}
+        if: ${{ env.PAT != '' }}
         uses: actions/add-to-project@v1.0.2
         with:
           project-url: https://github.com/users/shanerconsulting/projects/1
-          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
+          github-token: ${{ env.PAT }}
