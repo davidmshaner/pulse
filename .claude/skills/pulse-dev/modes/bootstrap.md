@@ -79,12 +79,17 @@ on:
 jobs:
   add-to-project:
     runs-on: ubuntu-latest
+    env:
+      PAT: ${{ secrets.ADD_TO_PROJECT_PAT }}   # `secrets` is NOT allowed in `if:` (it makes the
+                                               # whole file invalid → every push fails at parse
+                                               # time and emails a failure). Map to env, gate on env.
     steps:
-      - uses: actions/add-to-project@v1.0.2
+      - if: ${{ env.PAT != '' }}               # skips cleanly until the PAT secret exists — no failed runs
+        uses: actions/add-to-project@v1.0.2
         with:
           # users: https://github.com/users/<owner>/projects/<N> · orgs: https://github.com/orgs/<owner>/projects/<N>
           project-url: https://github.com/orgs/shanerconsulting/projects/<N>
-          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
+          github-token: ${{ env.PAT }}
 ```
 **One manual step (can't be done headlessly):** create a fine-grained PAT with **Projects: read/write
 + Issues: read** scope and store it as the repo secret **`ADD_TO_PROJECT_PAT`**
