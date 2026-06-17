@@ -3,7 +3,39 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
+
+# The snapshot loop refreshes every 600s. If state.json is older than ~2.5 cycles the
+# refresh has stalled (pipeline killed before its final write); the card should say so
+# rather than keep painting old numbers as if current. See runner.py / issue #28.
+STALE_AFTER_SECONDS = 1500
+STALE_MARK = "⋯"
+
+
+def is_stale(state: dict | None, now: datetime | None = None,
+             max_age_seconds: int = STALE_AFTER_SECONDS) -> bool:
+    """True when the card's data is too old to trust (or absent/unparseable).
+
+    `now` is injectable for testing; when omitted it's read in the state's own tz so
+    the comparison is apples-to-apples with the tz-aware `generated_at`.
+    """
+    if not state:
+        return True
+    gen = state.get("generated_at")
+    if not gen:
+        return True
+    try:
+        ts = datetime.fromisoformat(gen)
+    except (TypeError, ValueError):
+        return True
+    if now is None:
+        now = datetime.now(ts.tzinfo)
+    elif ts.tzinfo is not None and now.tzinfo is None:
+        now = now.replace(tzinfo=ts.tzinfo)
+    elif ts.tzinfo is None and now.tzinfo is not None:
+        ts = ts.replace(tzinfo=now.tzinfo)
+    return (now - ts).total_seconds() > max_age_seconds
 
 
 def load_state(widget_dir: Path) -> dict | None:
@@ -36,7 +68,16 @@ def _abbr(name: str) -> str:
     return name[:2]
 
 
-def title_for(state: dict | None) -> str:
+def title_for(state: dict | None, stale: bool = False) -> str:
+    """Menu-bar title. When `stale`, prefix a mark so a frozen refresh is visible
+    (the underlying value is kept, not blanked — it's the last-known reading)."""
+    base = _title_base(state)
+    if stale and state is not None:
+        return STALE_MARK + base
+    return base
+
+
+def _title_base(state: dict | None) -> str:
     if state is None:
         return "Pulse"
     lb = state.get("live_bucket")
