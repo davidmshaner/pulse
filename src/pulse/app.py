@@ -47,6 +47,11 @@ SNAPSHOT_INTERVAL = 600.0   # seconds — how often the pipeline runs
 # 300s clears the measured ~60s light-load run with margin for a loaded machine; the
 # durable cost reduction (incremental scan cache) is tracked as a follow-up. Issue #28.
 SNAPSHOT_TIMEOUT = 300.0
+# The bootstrap snapshot (no state.json yet) runs SYNCHRONOUSLY in
+# applicationDidFinishLaunching, before any timer is scheduled — it blocks the menu-bar
+# icon from appearing. Cap it tighter than the background ceiling so a slow first scan
+# can't delay first paint for minutes; the icon then fills in on the next tick.
+FIRST_PAINT_TIMEOUT = 120.0
 LIVE_INTERVAL = 60.0        # seconds — repaint title glyph
 
 
@@ -75,9 +80,10 @@ class AppDelegate(NSObject):
         self.popover.setContentViewController_(vc)
         self.popover.setBehavior_(AppKit.NSPopoverBehaviorTransient)
 
-        # First paint: if no state, run snapshot synchronously once.
+        # First paint: if no state, run snapshot synchronously once (tight ceiling —
+        # this blocks the UI thread before timers start).
         if _load_state() is None:
-            self._run_snapshot()
+            self._run_snapshot(timeout=FIRST_PAINT_TIMEOUT)
         self._repaint()
 
         NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
@@ -98,7 +104,7 @@ class AppDelegate(NSObject):
             NSURL.fileURLWithPath_(str(PKG_DIR / "panel")))
 
     # --- snapshot ---------------------------------------------------------
-    def _run_snapshot(self) -> None:
+    def _run_snapshot(self, timeout: float = SNAPSHOT_TIMEOUT) -> None:
         # sys.executable, not a hardcoded /usr/bin/python3: the LaunchAgent runs
         # app.py under the repo's .venv, so snapshot must run there too — the venv
         # is where the deps live. snapshot.py then propagates sys.executable to its
@@ -108,7 +114,7 @@ class AppDelegate(NSObject):
         # on timeout, so a slow scan_sessions can't orphan to PID 1 and leak CPU.
         # Failures are logged (not swallowed) so a stalled refresh is diagnosable.
         runner.run_in_group([sys.executable, str(SNAPSHOT_SCRIPT)],
-                            timeout=SNAPSHOT_TIMEOUT, log_path=SNAPSHOT_LOG)
+                            timeout=timeout, log_path=SNAPSHOT_LOG)
 
     def _snapshot_async(self):
         if not self._lock.acquire(blocking=False):

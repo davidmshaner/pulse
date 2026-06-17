@@ -47,6 +47,14 @@ def test_is_stale_true_when_state_none():
     assert fc.is_stale(None, now=NOW) is True
 
 
+def test_is_stale_handles_naive_generated_at_with_aware_now():
+    # legacy/naive generated_at (no offset) + an aware injected now must not raise
+    naive = {"generated_at": "2026-06-17T10:00:00"}  # naive, 6h before NOW
+    assert fc.is_stale(naive, now=NOW) is True
+    fresh_naive = {"generated_at": (NOW.replace(tzinfo=None)).isoformat(timespec="seconds")}
+    assert fc.is_stale(fresh_naive, now=NOW) is False
+
+
 def test_title_marks_stale_distinctly():
     state = _capped_state(5)
     fresh = fc.title_for(state, stale=False)

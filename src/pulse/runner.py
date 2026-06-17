@@ -50,10 +50,12 @@ def _kill_group(proc: subprocess.Popen) -> None:
     try:
         pgid = os.getpgid(proc.pid)
     except ProcessLookupError:
-        return
+        # Leader already reaped; with start_new_session the pgid == the pid, so still
+        # try that group — grandchildren may be reparented but share the group.
+        pgid = proc.pid
     try:
         os.killpg(pgid, signal.SIGKILL)
-    except ProcessLookupError:
+    except (ProcessLookupError, PermissionError):
         pass
 
 

@@ -33,6 +33,8 @@ def is_stale(state: dict | None, now: datetime | None = None,
         now = datetime.now(ts.tzinfo)
     elif ts.tzinfo is not None and now.tzinfo is None:
         now = now.replace(tzinfo=ts.tzinfo)
+    elif ts.tzinfo is None and now.tzinfo is not None:
+        ts = ts.replace(tzinfo=now.tzinfo)
     return (now - ts).total_seconds() > max_age_seconds
 
 
