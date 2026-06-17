@@ -91,10 +91,20 @@ jobs:
           project-url: https://github.com/orgs/shanerconsulting/projects/<N>
           github-token: ${{ env.PAT }}
 ```
-**One manual step (can't be done headlessly):** create a fine-grained PAT with **Projects: read/write
-+ Issues: read** scope and store it as the repo secret **`ADD_TO_PROJECT_PAT`**
-(`gh secret set ADD_TO_PROJECT_PAT --repo shanerconsulting/pulse` after generating it in the browser).
-Until that secret exists the workflow no-ops; the built-in toggles (2b) cover the gap immediately.
+**Set the secret headlessly from the existing gh token (NO browser PAT, no paste).** The
+`shanerconsulting` gh token already carries `project` + `repo` scope, exactly what
+`actions/add-to-project` needs (Projects read/write + Issues read). Pipe it into the repo secret
+via `--body` (do NOT generate a fine-grained PAT in the browser):
+
+```bash
+gh auth switch --user shanerconsulting >/dev/null 2>&1
+gh secret set ADD_TO_PROJECT_PAT --repo shanerconsulting/pulse \
+  --body "$(gh auth token --user shanerconsulting)"
+gh secret list --repo shanerconsulting/pulse   # verify ADD_TO_PROJECT_PAT present
+gh auth switch --user davidmshaner >/dev/null 2>&1
+```
+The token rotates if the gh login is refreshed; re-run the one-liner if auto-add ever goes quiet.
+Until the secret exists the workflow no-ops; the built-in toggles (2b) cover the gap immediately.
 
 ### 2b. Built-in Project workflows (UI toggles — belt-and-suspenders + advancement)
 In the Project → **⋯ → Workflows**, enable:
