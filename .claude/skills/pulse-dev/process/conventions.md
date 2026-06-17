@@ -4,7 +4,17 @@
 > to run/gate, the branch + account discipline, and the traps not to re-diagnose.
 
 ## Build / run / gate
-- **Gate:** `python3 -m pytest -q` from the repo root must be green. Never claim done without it.
+- **Gate:** run pytest with the repo's **`.venv`** interpreter, not bare `python3` —
+  `.venv/bin/python3 -m pytest -q` from the repo root must be green. Never claim done without it.
+  (Bare `python3` is often Homebrew's, which lacks `pyyaml`/`pyobjc`; `config.py` then `sys.exit(2)`s
+  on import — "MISSING_DEPS" / `SystemExit: 2` — and the whole suite fails to collect. That's a
+  wrong-interpreter error, not a code failure.)
+- **Running tests in a `.worktrees/issue-<n>` worktree:** the worktree has no `.venv` and none of the
+  gitignored user data, so use the main checkout's venv and symlink the data files in once:
+  ```bash
+  for f in config.yaml appetite.yaml; do ln -s ../../$f $f; done   # gitignored; never committed
+  ../../.venv/bin/python3 -m pytest -q
+  ```
 - **Run (foreground)** for a quick look: `python3 src/pulse/app.py` (Ctrl-C to stop).
 - **Run (installed)** — the shipped path is a per-user **LaunchAgent** (`com.pulse.menubar`):
   ```bash
