@@ -21,11 +21,17 @@ CLI file-evidence uses. (We deliberately do NOT round-trip through the
 ~/.claude-style "encoded" form + encoded_matches, whose '-'-delimited prefix test
 would mis-resolve a sibling dir like /x/acme-archive onto the /x/acme bucket.)
 
+Codex Desktop runs every session inside an ephemeral git worktree under
+~/.codex/worktrees/<hash>/<repo-leaf> — a cwd that matches no registry bucket. We
+map it back to its origin repo via the worktree's .git gitdir before resolving
+(see _effective_project_dir), so Desktop work is attributed to the real project.
+A worktree Codex has already deleted can't be resolved from its path and is
+counted as unresolved (logged), not guessed.
+
 Scope, vs the richer CLI path: CLI sessions resolve by file-evidence first, then
-project-dir, then escalate to needs_llm. Codex here resolves by cwd only and
-drops anything unresolved (never poisons totals, consistent with scan_cowork).
-cwd is a strong signal for Codex (it is launched from the project dir), so this
-covers the common case; file-evidence / needs_llm escalation is a future follow-up.
+project-dir, then escalate to needs_llm. Codex here resolves by (worktree-aware)
+cwd only and drops anything unresolved (never poisons totals, consistent with
+scan_cowork). file-evidence / needs_llm escalation is a future follow-up.
 """
 from __future__ import annotations
 
@@ -75,6 +81,37 @@ def _session_meta(filepath: Path) -> dict | None:
                     return e.get("payload") or {}
     except (OSError, UnicodeDecodeError):
         return None
+    return None
+
+
+# --- worktree → origin repo resolution -------------------------------------
+
+# Codex Desktop runs every session inside an ephemeral git worktree under
+# ~/.codex/worktrees/<hash>/<repo-leaf>. That cwd matches no registry source_path,
+# so without this step ALL Codex Desktop work is dropped. The worktree's .git file
+# records "gitdir: <origin-repo>/.git/worktrees/<name>" — the only exact origin
+# signal, valid while the worktree exists on disk.
+_CODEX_WORKTREE_MARKER = "/.codex/worktrees/"
+_GIT_WORKTREE_MARKER = "/.git/worktrees/"
+
+
+def _effective_project_dir(cwd: str) -> str | None:
+    """Map a Codex cwd to the real project dir for bucket resolution.
+
+    - Not a Codex worktree → return cwd unchanged.
+    - A worktree we can resolve (its .git gitdir is readable) → the origin repo.
+    - A worktree we can't resolve (already deleted — the path alone can't tell us
+      which repo it was) → None, so the caller counts it as an unresolved worktree
+      rather than guessing and risking misattribution of billable hours."""
+    if _CODEX_WORKTREE_MARKER not in cwd:
+        return cwd
+    try:
+        txt = (Path(cwd) / ".git").read_text()
+    except OSError:
+        return None
+    for line in txt.splitlines():
+        if line.startswith("gitdir:") and _GIT_WORKTREE_MARKER in line:
+            return line.split("gitdir:", 1)[1].strip().split(_GIT_WORKTREE_MARKER)[0]
     return None
 
 
@@ -130,6 +167,7 @@ def scan(window_start: datetime, window_end: datetime,
     window_start_epoch = window_start.timestamp()
 
     sessions: list[dict] = []
+    unresolved_worktrees = 0
     for path in _iter_rollout_files(roots):
         try:
             mtime = path.stat().st_mtime
@@ -144,17 +182,24 @@ def scan(window_start: datetime, window_end: datetime,
         if not meta:
             continue
         cwd = meta.get("cwd", "")
-        bucket = _resolve_bucket(cwd, flat, excluded_paths)
+        proj = _effective_project_dir(cwd)
+        if proj is None:
+            unresolved_worktrees += 1  # Codex worktree already deleted — can't attribute
+            continue
+        bucket = _resolve_bucket(proj, flat, excluded_paths)
         if bucket is None:
-            continue  # unresolvable cwd — drop rather than poison totals
+            continue  # cwd not under any registry bucket (or excluded) — drop, don't poison totals
         sessions.append({
             "filepath":    str(path),
             "bucket_path": bucket,
             "first_ts":    None,
             "last_ts":     None,
-            "encoded":     cwd,          # diagnostic only; pipeline reads filepath + bucket_path
+            "encoded":     proj,         # diagnostic only; pipeline reads filepath + bucket_path
             "category":    "codex",
         })
+    if unresolved_worktrees:
+        print(f"scan_codex: {unresolved_worktrees} Codex worktree session(s) "
+              f"unresolved (worktree deleted)", file=_sys.stderr)
     return sessions
 
 

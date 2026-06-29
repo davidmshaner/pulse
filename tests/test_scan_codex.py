@@ -108,6 +108,44 @@ def test_excluded_cwd_is_none(tmp_path):
     assert bp is None
 
 
+# --- worktree → origin repo resolution (Codex Desktop) ---------------------
+
+def test_non_worktree_cwd_unchanged():
+    assert scan_codex._effective_project_dir("/tmp/pulse-codex-test/acme/x") == "/tmp/pulse-codex-test/acme/x"
+
+
+def test_worktree_resolves_to_origin_via_gitfile(tmp_path):
+    # Simulate ~/.codex/worktrees/<hash>/product-next with a .git pointing at origin.
+    wt = tmp_path / ".codex" / "worktrees" / "d914" / "product-next"
+    wt.mkdir(parents=True)
+    origin = "/tmp/pulse-codex-test/acme/product-next"
+    (wt / ".git").write_text(f"gitdir: {origin}/.git/worktrees/product-next\n")
+    assert scan_codex._effective_project_dir(str(wt)) == origin
+
+
+def test_deleted_worktree_is_none(tmp_path):
+    # A worktree path with no .git on disk (Codex already cleaned it up) → None,
+    # so the caller counts it unresolved rather than guessing.
+    gone = tmp_path / ".codex" / "worktrees" / "dead" / "product-next"
+    assert scan_codex._effective_project_dir(str(gone)) is None
+
+
+def test_scan_resolves_worktree_session_to_origin_bucket(tmp_path):
+    # End-to-end: a Codex Desktop rollout whose cwd is a worktree resolves to the
+    # ORIGIN repo's bucket (Acme), not dropped.
+    start, end = _recent_window()
+    mid = end - timedelta(hours=1)
+    wt = tmp_path / ".codex" / "worktrees" / "abcd" / "product-next"
+    wt.mkdir(parents=True)
+    (wt / ".git").write_text("gitdir: /tmp/pulse-codex-test/acme/product-next/.git/worktrees/product-next\n")
+    f = _write_rollout(tmp_path / "sessions" / "rollout-w.jsonl", str(wt), [mid])
+    os.utime(f, (mid.timestamp(), mid.timestamp()))
+    out = scan_codex.scan(start, end, roots=[tmp_path / "sessions"], registry=REGISTRY)
+    assert len(out) == 1
+    assert out[0]["bucket_path"] == ["Acme"]
+    assert out[0]["encoded"] == "/tmp/pulse-codex-test/acme/product-next"
+
+
 # --- scan(): window pre-filter, discovery, drop-unresolved -----------------
 
 def _recent_window():
