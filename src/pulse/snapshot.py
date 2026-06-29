@@ -556,9 +556,12 @@ def main() -> None:
     # The scanner resolves each rollout's cwd to a bucket via the same registry
     # matcher CLI sessions use and returns CLI-shape session dicts (read in place —
     # rollouts already carry top-level UTC timestamps), so they slot straight into
-    # per_path_minutes alongside CLI + Cowork sessions. Cross-surface even-split
-    # dedupe means a /codex run shelled out from a Claude Code session (same bucket)
-    # counts its wall-clock once, not twice.
+    # per_path_minutes alongside CLI + Cowork sessions. When a /codex run shelled
+    # out from a Claude Code session resolves to the SAME bucket as its parent
+    # (the common case — same cwd), even_split_fractional's intra-bucket merge
+    # counts the overlapping wall-clock once. (If the parent CLI session resolved
+    # to a different/deeper bucket via file-evidence, the overlap even-splits
+    # across buckets, like any other cross-bucket concurrency.)
     codex_sessions = scan_codex.scan(widest_start, widest_end)
     all_sessions = confident_sessions + cowork_sessions + codex_sessions
 

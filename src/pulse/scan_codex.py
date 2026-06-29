@@ -15,10 +15,17 @@ rollout is consumed IN PLACE; no materialized copy is needed (unlike Cowork's
 _audit_timestamp rewrite). A returned session dict therefore needs only
 filepath + bucket_path; compute_bucket_times() does the rest.
 
-Bucket attribution reuses the prematch path matchers
-(classify_session_by_project_dir + launch_dir_exact, keyed on the encoded cwd) —
-the same registry-faithful resolution CLI sessions get. Unresolved sessions are
-dropped (never poison totals), consistent with scan_cowork.
+Bucket attribution: Codex's cwd is a real absolute path, so we resolve it with
+the shared match_file_to_bucket() — exact path-prefix matching, the same matcher
+CLI file-evidence uses. (We deliberately do NOT round-trip through the
+~/.claude-style "encoded" form + encoded_matches, whose '-'-delimited prefix test
+would mis-resolve a sibling dir like /x/acme-archive onto the /x/acme bucket.)
+
+Scope, vs the richer CLI path: CLI sessions resolve by file-evidence first, then
+project-dir, then escalate to needs_llm. Codex here resolves by cwd only and
+drops anything unresolved (never poisons totals, consistent with scan_cowork).
+cwd is a strong signal for Codex (it is launched from the project dir), so this
+covers the common case; file-evidence / needs_llm escalation is a future follow-up.
 """
 from __future__ import annotations
 
@@ -33,7 +40,7 @@ _sys.path.insert(0, str(WIDGET_DIR))
 _sys.path.insert(0, str(WIDGET_DIR / "timecore"))
 from classify import (  # noqa: E402
     walk_registry,
-    classify_session_by_project_dir,
+    match_file_to_bucket,
     sc_root_to_internal,
 )
 
@@ -46,7 +53,11 @@ _META_SCAN_LINES = 20
 
 def _session_meta(filepath: Path) -> dict | None:
     """Return the payload of the first 'session_meta' line of a rollout, or None.
-    The payload carries cwd, id, originator, and optional source.subagent."""
+    The payload carries cwd, id, originator, and optional source.subagent.
+
+    Tolerant like time_math.collect_timestamps: a partially-written or non-UTF-8
+    rollout (Codex may be mid-write) must skip that one file, never crash the whole
+    snapshot refresh — so catch UnicodeDecodeError (from readline), not just OSError."""
     try:
         with open(filepath) as f:
             for _ in range(_META_SCAN_LINES):
@@ -62,7 +73,7 @@ def _session_meta(filepath: Path) -> dict | None:
                     continue
                 if e.get("type") == "session_meta":
                     return e.get("payload") or {}
-    except OSError:
+    except (OSError, UnicodeDecodeError):
         return None
     return None
 
@@ -70,18 +81,16 @@ def _session_meta(filepath: Path) -> dict | None:
 # --- bucket resolution (reuse the registry classifiers) --------------------
 
 def _resolve_bucket(cwd: str, flat_buckets_sorted, excluded_paths) -> list | None:
-    """Resolve a Codex cwd to a bucket path via the same project-dir matcher
-    prematch uses for CLI sessions. Returns the bucket path (list) or None (drop).
+    """Resolve a Codex cwd to a bucket path. Returns the bucket path (list) or None.
 
-    Codex has no path-encoded project dir like ~/.claude/projects, so we synthesize
-    the `encoded` form the matcher expects ('/'->'-', '_'->'-')."""
+    Codex's cwd is a real absolute path, so match it EXACTLY with the shared
+    match_file_to_bucket (fp == src or fp.startswith(src + '/'), and excluded_paths
+    rejected first). Using the real path avoids the false positives the lossy
+    encoded-form matcher produces — e.g. /x/acme-archive must NOT land on /x/acme."""
     if not cwd:
         return None
-    sess = {"encoded": cwd.replace("/", "-").replace("_", "-")}
-    b, _reason = classify_session_by_project_dir(sess, flat_buckets_sorted, excluded_paths)
-    if b:
-        return sc_root_to_internal(b)
-    return None
+    b = match_file_to_bucket(cwd, flat_buckets_sorted, excluded_paths)
+    return sc_root_to_internal(list(b)) if b else None
 
 
 # --- discovery -------------------------------------------------------------
@@ -108,8 +117,7 @@ def scan(window_start: datetime, window_end: datetime,
     re-read per-line by compute_bucket_times within the exact window."""
     if roots is None or registry is None:
         import yaml  # local import: only needed when loading config files
-        _sys.path.insert(0, str(WIDGET_DIR))
-        import config  # noqa: E402
+        import config  # noqa: E402  (WIDGET_DIR already on sys.path from module import)
         if roots is None:
             roots = [config.CODEX_ROOT, config.CODEX_ARCHIVED_ROOT]
         if registry is None:
@@ -135,7 +143,8 @@ def scan(window_start: datetime, window_end: datetime,
         meta = _session_meta(path)
         if not meta:
             continue
-        bucket = _resolve_bucket(meta.get("cwd", ""), flat, excluded_paths)
+        cwd = meta.get("cwd", "")
+        bucket = _resolve_bucket(cwd, flat, excluded_paths)
         if bucket is None:
             continue  # unresolvable cwd — drop rather than poison totals
         sessions.append({
@@ -143,7 +152,7 @@ def scan(window_start: datetime, window_end: datetime,
             "bucket_path": bucket,
             "first_ts":    None,
             "last_ts":     None,
-            "encoded":     meta.get("cwd", "").replace("/", "-").replace("_", "-"),
+            "encoded":     cwd,          # diagnostic only; pipeline reads filepath + bucket_path
             "category":    "codex",
         })
     return sessions

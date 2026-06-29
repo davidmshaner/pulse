@@ -74,6 +74,14 @@ def test_session_meta_missing_is_none(tmp_path):
     assert scan_codex._session_meta(f) is None
 
 
+def test_session_meta_non_utf8_does_not_crash(tmp_path):
+    # A partially-written / non-UTF-8 rollout (Codex mid-write) must skip the file,
+    # never raise UnicodeDecodeError out of the scan and abort the whole snapshot.
+    f = tmp_path / "rollout-bad.jsonl"
+    f.write_bytes(b'\xff\xfe not valid utf-8 \x80\x81\n')
+    assert scan_codex._session_meta(f) is None
+
+
 # --- bucket resolution from cwd (reuses the registry classifiers) ----------
 
 def test_cwd_under_source_path_resolves(tmp_path):
@@ -83,6 +91,14 @@ def test_cwd_under_source_path_resolves(tmp_path):
 
 def test_unrelated_cwd_is_none(tmp_path):
     assert scan_codex._resolve_bucket("/tmp/somewhere/else", FLAT, []) is None
+
+
+def test_sibling_dir_does_not_misresolve(tmp_path):
+    # Regression: a sibling dir sharing a name prefix with a bucket's source_path
+    # must NOT resolve to that bucket. The lossy encoded-form matcher would wrongly
+    # match '...acme-archive' onto the '...acme' bucket via startswith(src + '-');
+    # exact path matching rejects it.
+    assert scan_codex._resolve_bucket("/tmp/pulse-codex-test/acme-archive", FLAT, []) is None
 
 
 def test_excluded_cwd_is_none(tmp_path):
