@@ -21,6 +21,7 @@ import yaml
 PKG_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(PKG_DIR))
 import config  # noqa: E402
+import scan_codex  # noqa: E402
 import scan_cowork  # noqa: E402
 
 SCRIPTS = config.PKG_DIR                   # vendored scan_sessions/prematch/fetch_meetings live here
@@ -550,7 +551,16 @@ def main() -> None:
     # alongside CLI sessions — cross-surface even-split-fractional dedupe
     # happens for free.
     cowork_sessions = scan_cowork.scan(widest_start, widest_end)
-    all_sessions = confident_sessions + cowork_sessions
+
+    # Codex CLI sessions live outside ~/.claude/projects/ too (~/.codex/sessions/).
+    # The scanner resolves each rollout's cwd to a bucket via the same registry
+    # matcher CLI sessions use and returns CLI-shape session dicts (read in place —
+    # rollouts already carry top-level UTC timestamps), so they slot straight into
+    # per_path_minutes alongside CLI + Cowork sessions. Cross-surface even-split
+    # dedupe means a /codex run shelled out from a Claude Code session (same bucket)
+    # counts its wall-clock once, not twice.
+    codex_sessions = scan_codex.scan(widest_start, widest_end)
+    all_sessions = confident_sessions + cowork_sessions + codex_sessions
 
     # Load learnings for soft meeting resolution
     with open(config.LEARNINGS) as f:
