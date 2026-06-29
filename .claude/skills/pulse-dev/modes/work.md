@@ -72,6 +72,9 @@ user path. Full procedure: **`qa.md`**. The `pytest` gate + the app read togethe
 gate of this step.
 
 ## 5. PR → In Review → QA → Done
+**Before opening the PR**, if the change alters behavior, add a `CHANGELOG.md` entry under
+`## [Unreleased]` (ending `(#<n>)`) and run `scripts/render_recent_changes.py` so the README
+"What's New" block stays current; include both in the PR (see `CONTRIBUTING.md`).
 Open a PR against `main`, `Closes #<n>`, and **move the card to `In Review`**. **Review before
 merge** — `/code-review`, or dispatch a fresh diff-only review subagent (agent-authored work should
 not merge unreviewed). Fix the real findings. Run the app (`--qa`) to verify on the real path and
@@ -96,5 +99,6 @@ before merging (`--tail`, see `tail.md`). There is no shared deploy/prod target 
 
 ## Scope
 Execution only — isolate through merge, plus the QA gate and the feedback loop. It does not file
-issues (`--issue`) or provision the board (`--bootstrap`). There is no release/deploy step — a merge
-to `main` (and a relaunch to pick up changes) is the end.
+issues (`--issue`) or provision the board (`--bootstrap`). There is no deploy; most work ends at a
+merge to `main` (and a relaunch to pick up changes). Cutting a versioned release — `VERSION` bump +
+`vX.Y.Z` tag + GitHub Release — is a separate, deliberate step (runbook in `CONTRIBUTING.md`).

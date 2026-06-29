@@ -19,9 +19,12 @@ coordinating with a parallel agent, and setting up the board are **modes of one 
 - **superpowers is the coding harness of choice.** Engineering craft (brainstorm → spec → plan →
   TDD → review) is delegated to superpowers skills. This process encodes only Pulse-specific
   judgment: how work is captured, isolated, gated, and merged.
-- **Pulse is a single local single-user macOS app** (`shanerconsulting/pulse`, Python/rumps menu
-  bar, installed as a LaunchAgent). It ships as a locally-installed agent, not to any store or
-  service — so there is **no release track, no deploy**. A merge to `main` (+ relaunch) is the end.
+- **Pulse is a local macOS app run from source** (`shanerconsulting/pulse`, Python/rumps menu bar,
+  installed as a LaunchAgent), now used by **a few external users who update via `git pull`**. It
+  ships to no store or service, so there is **no deploy** — but there IS a light release track: a
+  behavior change adds a `CHANGELOG.md` entry, and a release bumps `VERSION` + tags `vX.Y.Z` + cuts
+  a GitHub Release (runbook in `CONTRIBUTING.md`). For most work a merge to `main` (+ relaunch) is
+  still the end; cutting a release is a deliberate, separate step.
 - **Account:** all GitHub work (board, issues) runs under **`shanerconsulting`** — switch to it for
   gh board/issue ops and restore your prior account after (the intake script does this for you).
 - **Generic version:** `knowledge/autonomous-development-harness.md` in the Shaner Consulting repo
@@ -52,8 +55,8 @@ coordinating with a parallel agent, and setting up the board are **modes of one 
 | 3. Execution | Up Next → In Progress + Build (superpowers) | `modes/work.md` |
 | 4. Pre-release QA (FAR boundary) | `pytest` gate **+ run the real app** | `modes/work.md` + `modes/qa.md` |
 | 5. Review and merge | review (`/code-review`) → merge | `modes/work.md` |
-| 6. Release | **n/a** — a merge to `main` (+ relaunch) IS the end | — |
-| 7. Validation / distribution | **n/a** — single-user, no distribution | — |
+| 6. Release | light — most merges end at `main` (+ relaunch); a release bumps `VERSION` + tags `vX.Y.Z` + cuts a GitHub Release | `CONTRIBUTING.md` |
+| 7. Validation / distribution | external users update via `git pull`; no store/installer distribution | `CONTRIBUTING.md` |
 | 8. Compounding feedback | feed `--issue` when a pickup needed context it lacked | `modes/work.md` |
 
 > Pulse has a **far QA boundary**: you run the real app locally (or reinstall the LaunchAgent), so
