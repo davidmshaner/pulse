@@ -58,6 +58,15 @@ PROJECTS_DIRS = [_resolve(p) for p in _cfg.get("projects_dirs", [".claude/projec
 _cr = _cfg.get("cowork_root")
 COWORK_ROOT = _resolve(_cr) if _cr else _default_cowork_root()
 
+# OpenAI Codex CLI rollout logs — Pulse's third usage surface (issue #34). Codex
+# writes one JSONL "rollout" per session under ~/.codex/sessions/YYYY/MM/DD/ (and
+# moves older ones to ~/.codex/archived_sessions/). Both roots are scanned so a
+# recently-archived session still inside the window is not missed. Config-overridable.
+_cxr = _cfg.get("codex_root")
+CODEX_ROOT = _resolve(_cxr) if _cxr else Path.home() / ".codex" / "sessions"
+_cxar = _cfg.get("codex_archived_root")
+CODEX_ARCHIVED_ROOT = _resolve(_cxar) if _cxar else Path.home() / ".codex" / "archived_sessions"
+
 # timecore is vendored inside this repo. Default to the package-local copy
 # (clone-location independent); an explicit config value overrides it.
 TIMECORE_DIR = _resolve(_cfg["timecore_dir"]) if _cfg.get("timecore_dir") else PKG_DIR / "timecore"
