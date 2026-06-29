@@ -100,8 +100,10 @@ def run_scan(start: datetime, end: datetime) -> Path:
 
 def run_fetch_meetings(start: datetime, end: datetime) -> Path:
     """OAuth can fail — return an empty meetings file in that case so the
-    rest of the pipeline still runs. Meetings are not currently used by the
-    widget's appetite math (sessions only); this is wired up for future use."""
+    rest of the pipeline still runs. Resolved meetings ARE folded into the
+    appetite math: per_path_minutes() composes them into the same per-bucket
+    sweep-line as sessions, so they count toward the hour bars and caps. Only
+    meetings that resolve to a bucket count; unresolved ones stay uncategorized."""
     out = CACHE / "meetings.json"
     try:
         subprocess.run(
