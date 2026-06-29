@@ -33,6 +33,20 @@ isn't. Every easy way to count it is wrong in a specific way:
 So the split is honest, whether you're billing clients, dividing time across your own
 products, or just want to know where the day went.
 
+<!-- RECENT:START -->
+## What's New
+
+**0.1.0** — 2026-06-29
+- _Added:_ First public release of Pulse: a local macOS menu-bar app that measures billable time across projects from Claude Code session activity.
+- _Added:_ Calendar meetings folded into the time totals — resolved meetings count toward the hour bars and appetite caps, attributed by attendee.
+- _Added:_ User-defined roll-up groups with a week/month toggle on the menu-bar card.
+- _Added:_ Standalone install: the pipeline runs from a fresh clone with no external checkout, building a repo-local `.venv` the LaunchAgent shares.
+- _Fixed:_ Refresh pipeline no longer silently jams under load — snapshot timeouts kill the process group and surface staleness instead of freezing the card (#28).
+- _Fixed:_ Calendar dependencies are pinned in `requirements.txt`, so meetings no longer silently fail to count after install (#26).
+
+_Full history in [CHANGELOG.md](CHANGELOG.md)._
+<!-- RECENT:END -->
+
 ## Everything stays local
 
 Pulse reads files already on your disk and writes one `state.json` next to itself. No
