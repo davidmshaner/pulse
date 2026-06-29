@@ -73,8 +73,9 @@ gate of this step.
 
 ## 5. PR → In Review → QA → Done
 **Before opening the PR**, if the change alters behavior, add a `CHANGELOG.md` entry under
-`## [Unreleased]` (ending `(#<n>)`) and run `scripts/render_recent_changes.py` so the README
-"What's New" block stays current; include both in the PR (see `CONTRIBUTING.md`).
+`## [Unreleased]` (ending `(#<n>)`). The README "What's New" block shows *released* versions and is
+regenerated only when a release is cut (see `CONTRIBUTING.md`) — a normal PR touches CHANGELOG, not
+the README block.
 Open a PR against `main`, `Closes #<n>`, and **move the card to `In Review`**. **Review before
 merge** — `/code-review`, or dispatch a fresh diff-only review subagent (agent-authored work should
 not merge unreviewed). Fix the real findings. Run the app (`--qa`) to verify on the real path and

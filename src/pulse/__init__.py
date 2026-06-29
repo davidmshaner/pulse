@@ -11,4 +11,9 @@ def _read_version() -> str:
         return "0+unknown"
 
 
-__version__ = _read_version()
+def __getattr__(name: str) -> str:
+    # PEP 562: resolve __version__ lazily so plain `import pulse` does no disk I/O;
+    # VERSION stays the single source of truth (read only when the value is used).
+    if name == "__version__":
+        return _read_version()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

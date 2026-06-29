@@ -11,15 +11,19 @@ it is not a commit dump.
 ## The README "What's New" block
 
 The top of [README.md](README.md) carries an auto-generated "What's New" block
-(the last 30 days of releases) between `<!-- RECENT:START -->` and
-`<!-- RECENT:END -->`. It is rendered from `CHANGELOG.md`, never hand-edited:
+between `<!-- RECENT:START -->` and `<!-- RECENT:END -->`. It shows the **latest
+few released versions** (default 3) — a function of `CHANGELOG.md` alone, *not* of
+the current date, so the committed README is stable until a release is cut. A
+normal PR adds an `## [Unreleased]` entry and does **not** change this block;
+regenerate it only when cutting a release (step 4 below):
 
 ```bash
 .venv/bin/python3 scripts/render_recent_changes.py          # rewrite the block
 .venv/bin/python3 scripts/render_recent_changes.py --check  # exit 1 if stale (CI-friendly)
 ```
 
-The script only ever touches text between the markers, and is idempotent.
+The script only ever touches text between the markers, is idempotent, and warns
+(without crashing) on a malformed CHANGELOG heading.
 
 ## Cutting a release
 
