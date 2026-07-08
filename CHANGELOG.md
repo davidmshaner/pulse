@@ -6,6 +6,7 @@ All notable changes to Pulse are documented here. Format follows
 
 ## [Unreleased]
 ### Added
+- Panel period toggle gains a third `day` segment (day · week · month) — clicking `day` switches every engagement/group row to today's hours. A day has no cap, so day rows render track-style (hours, no bar) and the choice persists across panel reopens like week/month (#39).
 - Classifier: exact launch-dir → bucket fallback (`session_launch_dir_exact` in the rules file), so an umbrella root can be mapped to a bucket without its subdirectories inheriting the mapping (#40).
 
 ## [0.1.0] - 2026-06-29

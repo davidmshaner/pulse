@@ -2,10 +2,12 @@
 """Pure translation of state.json into a display-ready view model.
 No I/O, no rounding surprises — the panel HTML consumes only this shape.
 
-Every row carries BOTH a `week` and a `month` block (wtd vs weekly cap, 30d vs
-monthly cap) so the panel's week|month toggle switches with no recompute. Group
-rows (roll-ups) always have caps; track-only engagements carry `cap_h: null`
-with status "track" and render hours without a bar."""
+Every row carries a `day`, `week`, and `month` block (today, wtd vs weekly cap,
+30d vs monthly cap) so the panel's day|week|month toggle switches with no
+recompute. Group rows (roll-ups) always have week/month caps; track-only
+engagements carry `cap_h: null` with status "track" and render hours without a
+bar. The `day` block is always cap-less (no daily cap exists), so every row
+renders track-style under the day view."""
 from __future__ import annotations
 
 
@@ -34,6 +36,9 @@ def _row(name: str, blk: dict, is_group: bool) -> dict:
         "today_h": round(blk.get("today_h", 0) or 0, 1),
         "d7_h": round(blk.get("7d", {}).get("actual_h", 0) or 0, 1),
         "meeting_h": round(blk.get("meeting_h", 0) or 0, 1),
+        # A day has no cap today, so `day` is always a cap-less track cell (hours,
+        # no bar) — even for rows that are capped for the week/month.
+        "day":   _window(blk.get("today_h", 0) or 0, None),
         "week":  _window(blk.get("wtd", {}).get("actual_h", 0) or 0, blk.get("weekly_cap_h")),
         "month": _window(blk.get("30d", {}).get("actual_h", 0) or 0, blk.get("monthly_cap_h")),
         "overlap": blk.get("overlap") or [],

@@ -66,7 +66,7 @@
 <script>
 var VM = null, VIEW = 'time', WINDOW = 'week';
 try{ var _sw = localStorage.getItem('pulse_window');
-     if(_sw==='week'||_sw==='month') WINDOW=_sw; }catch(e){}
+     if(_sw==='day'||_sw==='week'||_sw==='month') WINDOW=_sw; }catch(e){}
 function resolvePrompt(){
   var where = (VM && VM.repo_path) ? VM.repo_path : 'the pulse repo';
   return 'In ' + where + ', read setup/RESOLVE.md and resolve my uncategorized Pulse items.';
@@ -87,7 +87,18 @@ function seg(w){
   return '<span class="seg'+(WINDOW===w?' active':'')+'" onclick="setWindow(\''+w+'\')">'+w+'</span>';
 }
 
+function dayRowHTML(e){
+  // A day has no cap, so every row renders track-style (today's hours, no bar).
+  var cls = 'row' + (e.is_group ? ' total' : '');
+  return '<div class="'+cls+'"><div class="top">'
+    + '<span class="name">'+e.name+'</span>'
+    + '<span class="figs">'+fig(e.day.actual_h)+' today</span></div>'
+    + '<div class="sub"><span class="trk">tracked</span>'
+    + '<span>7d '+fig(e.d7_h)+'</span></div></div>';
+}
+
 function rowHTML(e){
+  if(WINDOW==='day') return dayRowHTML(e);
   var w = (WINDOW==='month') ? e.month : e.week;
   var unit = (WINDOW==='month') ? 'mo' : 'wk';
   var cls = 'row' + (e.is_group ? ' total' : '');
@@ -115,7 +126,8 @@ function rowHTML(e){
 
 function renderTime(){
   var html = '<div class="head"><span class="pick">'
-    + seg('week') + '<span class="pdiv">/</span>' + seg('month')
+    + seg('day') + '<span class="pdiv">/</span>' + seg('week')
+    + '<span class="pdiv">/</span>' + seg('month')
     + '</span><span class="toggle" onclick="setView(\'people\')">people ›</span></div>';
   (VM.groups||[]).forEach(function(g){ html += rowHTML(g); });
   VM.engagements.forEach(function(e){ html += rowHTML(e); });
