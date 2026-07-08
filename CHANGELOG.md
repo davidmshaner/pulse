@@ -9,6 +9,9 @@ All notable changes to Pulse are documented here. Format follows
 - Panel period toggle gains a third `day` segment (day · week · month) — clicking `day` switches every engagement/group row to today's hours. A day has no cap, so day rows render track-style (hours, no bar) and the choice persists across panel reopens like week/month (#39).
 - Classifier: exact launch-dir → bucket fallback (`session_launch_dir_exact` in the rules file), so an umbrella root can be mapped to a bucket without its subdirectories inheriting the mapping (#40).
 
+### Changed
+- Session scan keeps an incremental parse cache so unchanged JSONL files (same path+mtime+size) skip re-reading every refresh cycle. The expensive per-file read is cached under the gitignored `.cache/`; the rolling 30d window is re-applied cheaply each run, so output is byte-identical to the uncached path. Measured ~2.9x faster on a warm cache (#30).
+
 ## [0.1.0] - 2026-06-29
 ### Added
 - First public release of Pulse: a local macOS menu-bar app that measures billable time across projects from Claude Code session activity.
