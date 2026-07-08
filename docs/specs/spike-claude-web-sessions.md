@@ -56,7 +56,7 @@ recording as the "if you were ever Enterprise" path, not a route for this user.
 **Cost if pursued:** an Enterprise plan (org-level, not a code cost) — out of scope.
 
 ### 4. Account data export (Settings → Privacy → Export Data) — NO (not automatable, wrong shape)
-Available on all plans; produces a ZIP with conversations in JSON. But it is a
+Available on all plans; produces a downloadable archive of conversation data (format not documented in the support article). But it is a
 **manual, retrospective** flow: click Export → wait → receive an **email link
 that expires in 24h** → download. There is no API; automating it means scripting
 an authenticated login + inbox polling + unzip — fragile and against the "no
@@ -150,7 +150,7 @@ investigated, not viable" record.
 ## Sources
 - [Anthropic Admin API — Usage & Cost](https://platform.claude.com/docs/en/manage-claude/usage-cost-api) — org API-key usage only; excludes consumer claude.ai.
 - [Enterprise Analytics API coverage](https://www.finout.io/blog/anthropics-enterprise-analytics) — per-user chat/Code/Cowork usage, **Enterprise plan only** (Pro/Team unsupported).
-- [Export your Claude data](https://support.claude.com/en/articles/9450526-how-can-i-export-my-claude-data) — manual Settings → Privacy export; email link, 24h expiry; conversations as JSON.
+- [Export your Claude data](https://support.claude.com/en/articles/9450526-how-can-i-export-my-claude-data) — manual Settings → Privacy export; email link, 24h expiry (file format not stated).
 - [Claude Code issue #15542 — access Claude app chat history](https://github.com/anthropics/claude-code/issues/15542) — read-only access to claude.ai chat history is a requested, unimplemented feature.
 - [Agent SDK issue #14 — retrieve historical messages](https://github.com/anthropics/claude-agent-sdk-typescript/issues/14) — no programmatic retrieval of prior session messages today.
 - Local, read-only (this Mac): desktop app IndexedDB `conversations_v*` store; Chrome `History.visits.visit_duration` populated for the `claude.ai` host.
