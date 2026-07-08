@@ -38,8 +38,11 @@ def _income_month(billed: float, cap_value: float | None) -> dict:
                 "pct": 0, "status": "track", "over": False}
     cap_value = round(cap_value)
     pct = round(billed / cap_value * 100) if cap_value else 0
+    over = billed > cap_value
+    # A $ cap is a hard ceiling: any strict overage renders red, so the bar
+    # never disagrees with the "$X over" verdict in the 100-105% band.
     cell = {"income": True, "billed": billed, "cap_value": cap_value,
-            "pct": pct, "status": _status(pct), "over": billed > cap_value}
+            "pct": pct, "status": "over" if over else _status(pct), "over": over}
     delta = cap_value - billed
     if delta >= 0:
         cell["dollars_left"] = delta

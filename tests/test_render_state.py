@@ -226,12 +226,24 @@ def test_income_row_week_and_day_are_trackstyle_hours():
 
 
 def test_income_row_over_cap_reports_dollars_over():
-    s = {"engagements": {"Hot": {"income_mode": True, "bill_rate": 250,
-                                 "monthly_cap_value": 8000, "track_only": False,
+    s = {"engagements": {"Hot": {"income_mode": True, "bill_rate": 200,
+                                 "monthly_cap_value": 7500, "track_only": False,
                                  "today_h": 0.0, "wtd": {"actual_h": 0.0},
                                  "7d": {"actual_h": 0.0}, "30d": {"actual_h": 0.0},
-                                 "mtd": {"actual_h": 36.0, "billed": 9000}}}}
+                                 "mtd": {"actual_h": 45.0, "billed": 9000}}}}
     row = build_view_model(s)["engagements"][0]
     m = row["month"]
-    assert m["over"] is True and m["dollars_over"] == 1000 and m["status"] == "over"
+    assert m["over"] is True and m["dollars_over"] == 1500 and m["status"] == "over"
     assert "dollars_left" not in m
+
+
+def test_income_row_barely_over_cap_renders_red():
+    # 100-105% band: a $ cap is a hard ceiling, so the bar must agree with the
+    # "$X over" verdict — status flips to "over" on any strict overage.
+    s = {"engagements": {"Hot": {"income_mode": True, "bill_rate": 200,
+                                 "monthly_cap_value": 7500, "track_only": False,
+                                 "today_h": 0.0, "wtd": {"actual_h": 0.0},
+                                 "7d": {"actual_h": 0.0}, "30d": {"actual_h": 0.0},
+                                 "mtd": {"actual_h": 38.0, "billed": 7600}}}}
+    m = build_view_model(s)["engagements"][0]["month"]
+    assert m["over"] is True and m["status"] == "over" and m["dollars_over"] == 100

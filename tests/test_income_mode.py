@@ -61,19 +61,19 @@ def test_income_billed_is_hours_times_rate():
 
 
 def test_dollars_remaining_under_cap():
-    d = dollars_remaining_or_over(6250.0, 8000.0)
-    assert d["over"] is False and d["dollars_left"] == 1750.0
+    d = dollars_remaining_or_over(6000.0, 7500.0)
+    assert d["over"] is False and d["dollars_left"] == 1500.0
     assert "dollars_over" not in d
 
 
 def test_dollars_over_cap():
-    d = dollars_remaining_or_over(9000.0, 8000.0)
-    assert d["over"] is True and d["dollars_over"] == 1000.0
+    d = dollars_remaining_or_over(9000.0, 7500.0)
+    assert d["over"] is True and d["dollars_over"] == 1500.0
     assert "dollars_left" not in d
 
 
 def test_dollars_exactly_at_cap_is_not_over():
-    d = dollars_remaining_or_over(8000.0, 8000.0)
+    d = dollars_remaining_or_over(7500.0, 7500.0)
     assert d["over"] is False and d["dollars_left"] == 0.0
 
 
