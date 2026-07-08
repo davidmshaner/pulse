@@ -109,6 +109,25 @@ def read_local_head(repo_dir: Path) -> str | None:
         return None
 
 
+def read_head_branch(repo_dir: Path) -> str | None:
+    """The branch name HEAD symrefs to (e.g. 'main'), or None if detached/unreadable.
+
+    Used to keep the banner honest on a dev checkout: a feature branch (or detached
+    HEAD) differs from remote main for reasons that are not \"you are behind\", so the
+    banner only ever fires when HEAD is actually on main."""
+    try:
+        git_dir = _git_dir(repo_dir)
+        if git_dir is None:
+            return None
+        head = (git_dir / "HEAD").read_text().strip()
+        prefix = "ref: refs/heads/"
+        if head.startswith(prefix):
+            return head[len(prefix):].strip() or None
+        return None
+    except OSError:
+        return None
+
+
 # --- remote HEAD -----------------------------------------------------------
 
 def _default_opener(url: str, timeout: float):
@@ -172,7 +191,9 @@ def run_check(repo_dir: Path, now: datetime, prior: dict | None = None,
         last real fetch).
       * if the network fails, the cached remote is carried forward (keep nagging
         correctly) and checked_at is NOT advanced, so we retry on the next snapshot.
-      * behind is always recomputed as local != remote, both present. Anything unknown
+      * behind is always recomputed as local != remote, both present, AND HEAD on the
+        main branch — a dev checkout on a feature branch (or detached HEAD) differs
+        from remote main without being \"behind\", so it stays silent. Anything unknown
         -> behind False (silent, never a false banner).
 
     Never raises: any unexpected error yields None (leave the prior banner untouched)."""
@@ -195,7 +216,8 @@ def run_check(repo_dir: Path, now: datetime, prior: dict | None = None,
                 remote = (prior or {}).get("remote_head")
                 checked_at = (prior or {}).get("checked_at") or now.isoformat()
 
-        behind = bool(local and remote and local != remote)
+        on_main = read_head_branch(repo_dir) == "main"
+        behind = bool(on_main and local and remote and local != remote)
         return {
             "checked_at": checked_at,
             "local_head": local,

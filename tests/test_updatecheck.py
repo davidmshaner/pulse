@@ -128,8 +128,9 @@ def test_remote_head_missing_sha_key_is_silent():
 NOW = datetime(2026, 7, 8, 12, 0, 0, tzinfo=timezone.utc)
 
 
-def _patch_local(monkeypatch, sha):
+def _patch_local(monkeypatch, sha, branch="main"):
     monkeypatch.setattr(updatecheck, "read_local_head", lambda repo_dir: sha)
+    monkeypatch.setattr(updatecheck, "read_head_branch", lambda repo_dir: branch)
 
 
 def test_run_check_behind_true(monkeypatch, tmp_path):
@@ -138,6 +139,29 @@ def test_run_check_behind_true(monkeypatch, tmp_path):
     assert block["behind"] is True
     assert block["local_head"] == SHA_A and block["remote_head"] == SHA_B
     assert block["checked_at"] == NOW.isoformat()
+
+
+def test_run_check_feature_branch_is_silent(monkeypatch, tmp_path):
+    # A dev checkout on a feature branch differs from remote main without being
+    # "behind" — the banner must not fire (review finding on PR #45).
+    _patch_local(monkeypatch, SHA_A, branch="issue-99")
+    block = updatecheck.run_check(tmp_path, NOW, prior=None, opener=_opener_ok(SHA_B))
+    assert block["behind"] is False
+
+
+def test_run_check_detached_head_is_silent(monkeypatch, tmp_path):
+    _patch_local(monkeypatch, SHA_A, branch=None)
+    block = updatecheck.run_check(tmp_path, NOW, prior=None, opener=_opener_ok(SHA_B))
+    assert block["behind"] is False
+
+
+def test_read_head_branch(tmp_path):
+    _write(tmp_path / ".git" / "HEAD", "ref: refs/heads/main\n")
+    assert updatecheck.read_head_branch(tmp_path) == "main"
+    _write(tmp_path / ".git" / "HEAD", "ref: refs/heads/issue-99\n")
+    assert updatecheck.read_head_branch(tmp_path) == "issue-99"
+    _write(tmp_path / ".git" / "HEAD", SHA_B + "\n")   # detached
+    assert updatecheck.read_head_branch(tmp_path) is None
 
 
 def test_run_check_current_is_silent(monkeypatch, tmp_path):
