@@ -14,22 +14,24 @@ sys.path.insert(0, str(TIMECORE))
 
 from classify import classify_session_by_launch_dir_exact  # noqa: E402
 
-ROOT = "/Users/davidshaner/dev/chief_of_staff"
-MAP = {ROOT: ["SC", "SC-internal"]}
+ROOT = "/Users/u/dev/monorepo_root"
+MAP = {ROOT: ["umbrella", "umbrella-internal"]}
 
 
 def _sess(abs_path):
-    # ~/.claude/projects encodes the abs cwd as '/' -> '-' (and '_' -> '-').
-    return {"encoded": abs_path.replace("/", "-").replace("_", "-")}
+    # ~/.claude/projects encodes the abs cwd: '/', '_', and '.' all become '-'.
+    return {"encoded": abs_path.replace("/", "-").replace("_", "-").replace(".", "-")}
 
 
 def test_exact_root_resolves():
-    assert classify_session_by_launch_dir_exact(_sess(ROOT), MAP) == ["SC", "SC-internal"]
+    assert classify_session_by_launch_dir_exact(_sess(ROOT), MAP) == [
+        "umbrella", "umbrella-internal"]
 
 
 def test_subdir_does_not_inherit():
     # A session launched under the mapped root must NOT match — exact only.
-    assert classify_session_by_launch_dir_exact(_sess(ROOT + "/projects/offline"), MAP) is None
+    assert classify_session_by_launch_dir_exact(
+        _sess(ROOT + "/projects/sub"), MAP) is None
 
 
 def test_empty_map_is_noop():
@@ -38,4 +40,29 @@ def test_empty_map_is_noop():
 
 
 def test_unrelated_dir_is_none():
-    assert classify_session_by_launch_dir_exact(_sess("/Users/davidshaner/dev/other"), MAP) is None
+    assert classify_session_by_launch_dir_exact(_sess("/Users/u/dev/other"), MAP) is None
+
+
+def test_dotted_path_matches():
+    # Claude Code encodes '.' to '-' in project dir names (e.g. 'site.com' ->
+    # 'site-com'); the rule path must be normalized the same way or dotted
+    # dirs silently never match.
+    m = {"/Users/u/dev/site.com": ["personal", "site"]}
+    assert classify_session_by_launch_dir_exact(
+        _sess("/Users/u/dev/site.com"), m) == ["personal", "site"]
+
+
+def test_old_style_underscore_encoding_matches():
+    # Older ~/.claude/projects dirs preserve '_' (monorepo_root stays
+    # monorepo_root, not monorepo-root); the session side must be normalized
+    # too or the feature's own motivating case leaks to needs_llm.
+    old = {"encoded": "-Users-u-dev-monorepo_root"}
+    assert classify_session_by_launch_dir_exact(old, MAP) == [
+        "umbrella", "umbrella-internal"]
+
+
+def test_string_bucket_and_trailing_slash():
+    # A hand-edited YAML may give a bare string bucket (must not char-split
+    # into ['S','C',...]) or a trailing-slash path (must still match).
+    m = {ROOT + "/": "umbrella"}
+    assert classify_session_by_launch_dir_exact(_sess(ROOT), m) == ["umbrella"]

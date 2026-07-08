@@ -96,15 +96,19 @@ def classify_session_by_launch_dir_exact(sess, launch_dir_exact):
     every no-file-evidence session launched anywhere under that root). Intended
     for bare-root sessions whose only edits are their own auto-memory.
 
-    `launch_dir_exact` maps an absolute path -> bucket path (list of segments).
-    Matched on the encoded form, consistent with the rest of the matcher."""
+    `launch_dir_exact` maps an absolute path -> bucket path (list of segments,
+    or a single string for a one-segment path). Both sides are normalized to the
+    encoded form ('/', '_', '.' -> '-'); the session side too, because older
+    ~/.claude/projects dirs preserve '_' while newer ones encode it."""
     if not launch_dir_exact:
         return None
-    enc = lambda p: p.replace("/", "-").replace("_", "-").lstrip("-")
-    e = sess.get("encoded", "").lstrip("-")
+    enc = lambda p: (
+        p.replace("/", "-").replace("_", "-").replace(".", "-").lstrip("-")
+    )
+    e = enc(sess.get("encoded", ""))
     for path, bucket in launch_dir_exact.items():
-        if e == enc(path):
-            return list(bucket)
+        if e == enc(path.rstrip("/")):
+            return [bucket] if isinstance(bucket, str) else list(bucket)
     return None
 
 
