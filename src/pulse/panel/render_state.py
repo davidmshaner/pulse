@@ -71,24 +71,34 @@ def _income_row(name: str, blk: dict, is_group: bool) -> dict:
     }
 
 
-def _row(name: str, blk: dict, is_group: bool) -> dict:
+def _row(name: str, blk: dict, is_group: bool, depth: int = 0) -> dict:
     if blk.get("income_mode"):
-        return _income_row(name, blk, is_group)
-    track_only = bool(blk.get("track_only")) and not is_group
-    return {
-        "name": name,
-        "is_group": is_group,
-        "track_only": track_only,
-        "today_h": round(blk.get("today_h", 0) or 0, 1),
-        "d7_h": round(blk.get("7d", {}).get("actual_h", 0) or 0, 1),
-        "meeting_h": round(blk.get("meeting_h", 0) or 0, 1),
-        # A day has no cap today, so `day` is always a cap-less track cell (hours,
-        # no bar) — even for rows that are capped for the week/month.
-        "day":   _window(blk.get("today_h", 0) or 0, None),
-        "week":  _window(blk.get("wtd", {}).get("actual_h", 0) or 0, blk.get("weekly_cap_h")),
-        "month": _window(blk.get("30d", {}).get("actual_h", 0) or 0, blk.get("monthly_cap_h")),
-        "overlap": blk.get("overlap") or [],
-    }
+        row = _income_row(name, blk, is_group)
+    else:
+        # A capless roll-up group renders track-style (hours, no bar), like a
+        # track-only engagement; a capped group keeps its bar. (Before nested
+        # groups, every group was capped, so this only affects nested roll-ups.)
+        track_only = bool(blk.get("track_only"))
+        row = {
+            "name": name,
+            "is_group": is_group,
+            "track_only": track_only,
+            "today_h": round(blk.get("today_h", 0) or 0, 1),
+            "d7_h": round(blk.get("7d", {}).get("actual_h", 0) or 0, 1),
+            "meeting_h": round(blk.get("meeting_h", 0) or 0, 1),
+            # A day has no cap today, so `day` is always a cap-less track cell (hours,
+            # no bar) — even for rows that are capped for the week/month.
+            "day":   _window(blk.get("today_h", 0) or 0, None),
+            "week":  _window(blk.get("wtd", {}).get("actual_h", 0) or 0, blk.get("weekly_cap_h")),
+            "month": _window(blk.get("30d", {}).get("actual_h", 0) or 0, blk.get("monthly_cap_h")),
+            "overlap": blk.get("overlap") or [],
+        }
+    # `depth` drives indented rendering of nested groups (#31). Emitted ONLY when
+    # nonzero, so a flat (depth-0) config's view model — and its rendered DOM — is
+    # byte-identical to before nesting existed.
+    if depth:
+        row["depth"] = depth
+    return row
 
 
 def _update(state: dict) -> dict | None:
@@ -114,7 +124,7 @@ def build_view_model(state: dict) -> dict:
     raw_groups = state.get("groups")
     if raw_groups is None and state.get("total"):           # legacy state.json shape
         raw_groups = [{**state["total"], "name": "Billable"}]
-    groups = [_row(g["name"], g, True) for g in (raw_groups or [])]
+    groups = [_row(g["name"], g, True, g.get("depth", 0)) for g in (raw_groups or [])]
 
     now = None
     lb = state.get("live_bucket")

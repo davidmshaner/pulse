@@ -125,12 +125,22 @@ def menu_lines(state: dict | None) -> list:
     if groups is None and state.get("total"):          # legacy state.json shape
         groups = [{**state["total"], "name": "Billable"}]
     for g in groups or []:
-        wtd, d7, d30 = g["wtd"], g["7d"], g["30d"]
+        d7, d30 = g["7d"], g["30d"]
+        # Nested groups (#31) indent by depth; a capless roll-up shows hours only.
+        # depth 0 + a cap -> the exact lines from before nesting existed.
+        ind = "  " * g.get("depth", 0)
+        if g.get("weekly_cap_h") is None:
+            items.append(f"{ind}  {g['name'].upper()}  (rolls up, no cap)")
+            items.append(f"{ind}  today {g['today_h']:.1f}h  ·  7d {d7['actual_h']:.1f}h  ·  "
+                         f"30d {d30['actual_h']:.0f}h")
+            items.append(None)
+            continue
+        wtd = g["wtd"]
         dot = "● " if wtd["over"] else "  "
-        items.append(f"{dot}{g['name'].upper()}  cap {g['weekly_cap_h']:.0f}h/wk  {g['monthly_cap_h']:.0f}h/mo")
-        items.append(f"  {bar(wtd['actual_h'], g['weekly_cap_h'])}  "
+        items.append(f"{ind}{dot}{g['name'].upper()}  cap {g['weekly_cap_h']:.0f}h/wk  {g['monthly_cap_h']:.0f}h/mo")
+        items.append(f"{ind}  {bar(wtd['actual_h'], g['weekly_cap_h'])}  "
                      f"wtd {wtd['actual_h']:.1f}/{g['weekly_cap_h']:.0f}h   {fmt_period(wtd)}")
-        items.append(f"  today {g['today_h']:.1f}h  ·  7d {d7['actual_h']:.1f}h  ·  "
+        items.append(f"{ind}  today {g['today_h']:.1f}h  ·  7d {d7['actual_h']:.1f}h  ·  "
                      f"30d {d30['actual_h']:.0f}/{g['monthly_cap_h']:.0f}h")
         items.append(None)
     for name, eng in state.get("engagements", {}).items():

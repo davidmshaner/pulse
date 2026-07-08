@@ -51,6 +51,50 @@ def test_menu_lines_groups_engagements_and_track_only():
     assert None in lines, "expected separator markers (None)"
 
 
+# --- nested groups (issue #31) --------------------------------------------
+
+NESTED_STATE = {
+    "groups": [
+        {"name": "All Work", "depth": 0, "weekly_cap_h": 40, "monthly_cap_h": 160,
+         "today_h": 6.0, "wtd": {"actual_h": 22.0, "hours_left": 18.0, "over": False},
+         "7d": {"actual_h": 23.0}, "30d": {"actual_h": 86.0}},
+        {"name": "Billable", "depth": 1, "weekly_cap_h": 20, "monthly_cap_h": 80,
+         "today_h": 3.0, "wtd": {"actual_h": 18.0, "hours_left": 2.0, "over": False},
+         "7d": {"actual_h": 20.0}, "30d": {"actual_h": 70.0}},
+        {"name": "Personal Software", "depth": 1, "weekly_cap_h": None,
+         "monthly_cap_h": None, "today_h": 0.5,
+         "wtd": {"actual_h": 4.0}, "7d": {"actual_h": 4.5}, "30d": {"actual_h": 16.0}},
+    ],
+    "engagements": {},
+    "generated_at": "2026-07-08T11:00:00",
+}
+
+
+def test_menu_lines_nested_group_is_indented():
+    lines = [l for l in fc.menu_lines(NESTED_STATE) if l]
+    # the depth-1 sub-group's header line carries a leading indent the depth-0 one lacks
+    top = [l for l in lines if "ALL WORK" in l][0]
+    sub = [l for l in lines if "BILLABLE" in l][0]
+    assert not top.startswith("  ●") and not top.startswith("   ")
+    assert sub.startswith("  ")            # indented under its parent
+
+
+def test_menu_lines_capless_group_shows_no_cap():
+    lines = [l for l in fc.menu_lines(NESTED_STATE) if l]
+    text = "\n".join(lines)
+    assert "PERSONAL SOFTWARE" in text and "rolls up, no cap" in text
+    # a capless group prints no "cap ...h/wk" line
+    assert not any("PERSONAL SOFTWARE" in l and "h/wk" in l for l in lines)
+
+
+def test_menu_lines_flat_group_unindented_and_capped():
+    # the pre-nesting STATE (no depth key) still renders exactly as before
+    lines = [l for l in fc.menu_lines(STATE) if l]
+    head = [l for l in lines if "BILLABLE" in l][0]
+    assert head.startswith("  BILLABLE")   # dot placeholder "  ", no extra indent
+    assert "cap 32h/wk" in head
+
+
 # --- income-meter mode (issue #38) ----------------------------------------
 
 INCOME_STATE = {

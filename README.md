@@ -87,3 +87,47 @@ A deterministic pipeline, no LLM in the hot path: scan sessions, categorize
 (`timecore`), compute per-project hours against your budgets, render the menu-bar card
 from the resulting `state.json`. The repo is self-contained: `timecore`,
 `scan_sessions`, and `prematch` are vendored.
+
+## Splitting buckets & nesting groups
+
+Two hand-edited YAML conventions let you reshape how time rolls up. Both are validated
+at snapshot time — a bad edit fails loudly with a clear message instead of silently
+miscounting.
+
+**Split a bucket** (in `bucket-registry.yaml`) — carve a sub-folder out of a catch-all
+category into its own bucket by adding a `children:` list. Each child gets its own
+`source_path`, which **must be a subpath of its parent's** (deepest match wins, so work
+under the child path lands in the child and the rest stays in the parent). The engine
+already rolls child minutes up into the parent, so the parent keeps aggregating.
+
+```yaml
+buckets:
+  - name: Personal
+    source_path: /Users/you/personal
+    children:
+      - name: PulseWork
+        source_path: /Users/you/personal/pulse   # must live under the parent path
+```
+
+**Nest groups** (in `appetite.yaml`) — a group's `members` list may name **other groups**
+as well as engagements, so groups ladder up into a hierarchy. No new field; the tree reads
+top-down. A group with a cap (`weekly_hours`/`monthly_hours`) shows a bar; a capless group
+is a pure roll-up (summed hours, no bar). The menu-bar card and panel render the nesting
+indented, with correct rollup totals at each level.
+
+```yaml
+groups:
+  Billable:
+    members: [ClientA, ClientB, ClientC]   # engagements
+    weekly_hours: 32
+  "Personal Software":                     # capless roll-up (no bar)
+    members: [ProjectX, ProjectY]
+  "All Work":                              # members name GROUPS -> nesting
+    members: ["Billable", "Personal Software", Leftover]
+    weekly_hours: 40
+```
+
+An engagement reachable via more than one path is counted **once**. The snapshot rejects,
+loudly: an unknown member, a membership cycle, a nesting that double-counts an engagement
+(reachable via a group and that group's ancestor), and a registry child whose `source_path`
+is not under its parent.

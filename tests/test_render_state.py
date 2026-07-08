@@ -110,6 +110,65 @@ def test_legacy_total_back_compat():
     assert vm["groups"][0]["week"]["cap_h"] == 32.0
 
 
+# --- nested groups (issue #31) --------------------------------------------
+# A group block may carry a `depth` (nesting level) and may be capless (a pure
+# roll-up). depth is surfaced in the view model ONLY when nonzero, so a flat
+# (depth-0) config renders byte-identical to before nesting existed.
+
+NESTED_STATE = {
+    "generated_at": "2026-07-08T11:25:00-04:00",
+    "groups": [
+        {"name": "All Work", "depth": 0, "weekly_cap_h": 40.0, "monthly_cap_h": 160.0,
+         "today_h": 6.0, "wtd": {"actual_h": 22.0, "hours_left": 18.0, "over": False},
+         "7d": {"actual_h": 23.0}, "30d": {"actual_h": 86.0, "hours_left": 74.0, "over": False}},
+        {"name": "Billable", "depth": 1, "weekly_cap_h": 20.0, "monthly_cap_h": 80.0,
+         "today_h": 3.0, "wtd": {"actual_h": 18.0, "hours_left": 2.0, "over": False},
+         "7d": {"actual_h": 20.0}, "30d": {"actual_h": 70.0, "hours_left": 10.0, "over": False}},
+        {"name": "Personal Software", "depth": 1, "track_only": True,
+         "weekly_cap_h": None, "monthly_cap_h": None, "today_h": 0.5,
+         "wtd": {"actual_h": 4.0}, "7d": {"actual_h": 4.5}, "30d": {"actual_h": 16.0}},
+    ],
+    "engagements": {},
+}
+
+
+def test_nested_group_depth_surfaced_when_nonzero():
+    vm = build_view_model(NESTED_STATE)
+    by_name = {g["name"]: g for g in vm["groups"]}
+    assert by_name["Billable"]["depth"] == 1
+    assert by_name["Personal Software"]["depth"] == 1
+
+
+def test_top_level_group_omits_depth_key():
+    # depth 0 must NOT appear in the row — that's what keeps flat configs identical.
+    vm = build_view_model(NESTED_STATE)
+    top = [g for g in vm["groups"] if g["name"] == "All Work"][0]
+    assert "depth" not in top
+
+
+def test_flat_group_view_model_has_no_depth_key():
+    # The pre-nesting STATE (no depth in any block) yields rows with no depth key.
+    vm = build_view_model(STATE)
+    assert all("depth" not in g for g in vm["groups"])
+    assert all("depth" not in e for e in vm["engagements"])
+
+
+def test_capless_group_renders_track_style():
+    vm = build_view_model(NESTED_STATE)
+    ps = [g for g in vm["groups"] if g["name"] == "Personal Software"][0]
+    assert ps["track_only"] is True
+    assert ps["week"]["cap_h"] is None and ps["week"]["status"] == "track"
+    assert ps["week"]["actual_h"] == 4.0 and ps["month"]["actual_h"] == 16.0
+
+
+def test_capped_nested_group_keeps_its_bar():
+    vm = build_view_model(NESTED_STATE)
+    bill = [g for g in vm["groups"] if g["name"] == "Billable"][0]
+    assert bill["track_only"] is False
+    assert bill["week"]["cap_h"] == 20.0 and bill["week"]["pct"] == 90   # 18/20 -> "near"
+    assert bill["week"]["status"] == "near"
+
+
 def test_now_footer():
     vm = build_view_model(STATE)
     assert vm["now"] == {"label": "Consulting · Acme", "elapsed_min": 4}
