@@ -288,15 +288,42 @@ def test_unchanged_local_still_behind_keeps_cache_no_refetch(monkeypatch, tmp_pa
     assert block["behind"] is True
 
 
-def test_forced_refetch_failure_stays_fail_silent(monkeypatch, tmp_path):
-    # The forced refresh must keep the fail-silent contract: if the fetch dies,
-    # carry the cached remote forward (banner state unchanged), don't raise.
+def test_forced_refetch_failure_is_silent_and_retries(monkeypatch, tmp_path):
+    # If the FORCED refresh fails, the cache is known-suspect: never show the
+    # (possibly false) banner, and keep the prior local_head so the bypass
+    # re-fires next snapshot — retrying until a real fetch settles it.
     _patch_local(monkeypatch, SHA_C)
     prior = {"checked_at": (NOW - timedelta(minutes=30)).isoformat(),
              "local_head": SHA_A, "remote_head": SHA_B, "behind": True}
-    def _open(url, timeout=None):
+    def _down(url, timeout=None):
         raise URLError("offline")
-    block = updatecheck.run_check(tmp_path, NOW, prior=prior, opener=_open,
+    block = updatecheck.run_check(tmp_path, NOW, prior=prior, opener=_down,
                                   throttle_seconds=6 * 3600)
+    assert block["behind"] is False                      # suspect cache -> silent
     assert block["remote_head"] == SHA_B                 # carried forward
     assert block["checked_at"] == prior["checked_at"]    # window not advanced
+    assert block["local_head"] == SHA_A                  # bypass re-arms next tick
+
+    # Next snapshot, network back: bypass re-fires and settles the truth.
+    calls = []
+    def _up(url, timeout=None):
+        calls.append(url)
+        return _Resp(json.dumps({"sha": SHA_C}).encode())
+    nxt = updatecheck.run_check(tmp_path, NOW + timedelta(minutes=10), prior=block,
+                                opener=_up, throttle_seconds=6 * 3600)
+    assert calls and nxt["behind"] is False and nxt["remote_head"] == SHA_C
+
+
+def test_bypass_gated_on_main_no_wasted_fetch(monkeypatch, tmp_path):
+    # Off-main the banner is forced silent, so HEAD churn on a feature branch
+    # must NOT burn a fetch per snapshot inside the throttle window.
+    _patch_local(monkeypatch, SHA_C, branch="issue-99")
+    prior = {"checked_at": (NOW - timedelta(minutes=30)).isoformat(),
+             "local_head": SHA_A, "remote_head": SHA_B, "behind": False}
+    calls = []
+    def _open(url, timeout=None):
+        calls.append(url)
+        return _Resp(json.dumps({"sha": SHA_C}).encode())
+    block = updatecheck.run_check(tmp_path, NOW, prior=prior, opener=_open,
+                                  throttle_seconds=6 * 3600)
+    assert calls == [] and block["behind"] is False
