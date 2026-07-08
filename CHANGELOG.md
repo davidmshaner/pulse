@@ -5,6 +5,8 @@ All notable changes to Pulse are documented here. Format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- Classifier: exact launch-dir → bucket fallback (`session_launch_dir_exact` in the rules file), so an umbrella root can be mapped to a bucket without its subdirectories inheriting the mapping (#40).
 
 ## [0.1.0] - 2026-06-29
 ### Added
