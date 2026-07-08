@@ -21,6 +21,14 @@ Against the Pulse repo:
   design; name it.
 - **Gotchas:** scan `process/conventions.md` "Known issues" and cite any the work risks tripping
   (the rumps disabled-gray trap, the Python.app process-kill caveat, the borderless-overlay quirk).
+- **Privacy scrub (the repo is PUBLIC — issues are public pages):** genericize client data before
+  drafting. No real client names, billing rates, monthly values, caps, or per-client hours in the
+  issue body — use `ExampleClient` / round illustrative figures and phrases like "an hourly-billed
+  engagement". Real config stays in the user's gitignored `appetite.yaml`/registry; an issue may
+  point at it ("the hourly engagement's block") without quoting it. External users' and testers'
+  names: refer to them by role ("an external Pulse user") unless they're already public
+  contributors. (Learned 2026-07-08: five public issue/PR bodies had to be scrubbed and their
+  edit-history revisions manually deleted.)
 
 ### 3. Dedup check (HARD GATE — before drafting)
 Never create without checking for an existing match. List open AND recently-closed issues, judge by
