@@ -53,6 +53,12 @@ Settled traps. When the work risks one, cite it in the issue/PR rather than redi
 - **Privacy / session data is sensitive.** Pulse reads Claude Code session JSONL; never log or commit
   raw session content or paths that leak client names (issue #8 was a privacy scrub + history
   rewrite). Scrub before committing fixtures or logs.
+- **Python `round()` is banker's rounding** — `round(62.5) == 62`, not 63. It has bitten pct/$
+  assertions (#38). For display math, be explicit (`int(x + 0.5)` or `decimal`) or assert on
+  unrounded values.
+- **`panel/_rendered.html` is gitignored and regenerated at runtime** by `app.py`
+  (`write_rendered`). Template changes need no committed artifact regen — don't waste a step
+  looking for one.
 - **docs/ is tracked (since #43) but the repo is PUBLIC.** Specs/plans land in `docs/specs/` /
   `docs/plans/` and MUST be scrubbed — no client names, rates, or dollar figures. Five legacy
   pre-public design docs carry real client billing data and are explicitly gitignored; never

@@ -13,7 +13,9 @@ unclear. Don't interrogate.
 ### 2. Enrich (this is the value — do the legwork)
 Against the Pulse repo:
 - **Relevant code:** grep/glob `src/pulse/` (and `tests/`) for the files + symbols the ask touches.
-  Cite as `path:line — what lives here`. Never invent a path; say "none found". (Orientation:
+  Cite as `path — symbol/function name (what lives here)`; **anchor by SYMBOL, not raw line
+  number** — the repo ships often and every line number goes stale before pickup (a line number
+  is fine only as a secondary hint next to the symbol). Never invent a path; say "none found". (Orientation:
   `app.py` is the rumps menu-bar entry; `scan_sessions.py` / `scan_cowork.py` read Claude Code
   JSONL; `live_bucket.py` / `snapshot.py` do the time accounting; `fetch_meetings.py` pulls
   calendar; `config.py` owns `PKG_DIR`/`DATA_DIR`; `frontend_common.py` / `app_win.py` the UI.)
