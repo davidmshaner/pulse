@@ -59,6 +59,31 @@ def test_engagements_sorted_capped_over_then_under_then_trackonly():
     assert acme["today_h"] == 2.4 and acme["d7_h"] == 26.0
 
 
+def test_row_carries_day_block_track_style():
+    # A day has no cap, so every row's `day` block is cap-less (track style),
+    # mirroring today_h — regardless of whether the row is capped for the week.
+    vm = build_view_model(STATE)
+    acme = [e for e in vm["engagements"] if e["name"] == "Acme"][0]
+    assert acme["day"]["actual_h"] == 2.4
+    assert acme["day"]["cap_h"] is None
+    assert acme["day"]["status"] == "track"
+    assert acme["day"]["pct"] == 0
+
+
+def test_group_carries_day_block():
+    vm = build_view_model(STATE)
+    bill = vm["groups"][0]
+    assert bill["day"]["actual_h"] == 4.6            # round(4.56, 1)
+    assert bill["day"]["cap_h"] is None
+    assert bill["day"]["status"] == "track"
+
+
+def test_day_block_matches_today_h_everywhere():
+    vm = build_view_model(STATE)
+    for e in vm["engagements"] + vm["groups"]:
+        assert e["day"]["actual_h"] == e["today_h"], e["name"]
+
+
 def test_track_only_row_has_no_cap():
     vm = build_view_model(STATE)
     p = [e for e in vm["engagements"] if e["name"] == "Personal"][0]
