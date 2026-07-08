@@ -27,7 +27,50 @@ def _window(actual: float, cap: float | None) -> dict:
     return {"actual_h": round(actual, 1), "cap_h": round(cap, 1), "pct": pct, "status": _status(pct)}
 
 
+def _income_month(billed: float, cap_value: float | None) -> dict:
+    """The month cell for an income engagement (#38): dollars, not hours. With a
+    cap, a bar toward the $ ceiling plus $-left / $-over; without one, a pure
+    running meter (no bar). pct/status are recomputed here so the bar renders like
+    any other (under/near/over)."""
+    billed = round(billed)
+    if not cap_value:
+        return {"income": True, "billed": billed, "cap_value": None,
+                "pct": 0, "status": "track", "over": False}
+    cap_value = round(cap_value)
+    pct = round(billed / cap_value * 100) if cap_value else 0
+    cell = {"income": True, "billed": billed, "cap_value": cap_value,
+            "pct": pct, "status": _status(pct), "over": billed > cap_value}
+    delta = cap_value - billed
+    if delta >= 0:
+        cell["dollars_left"] = delta
+    else:
+        cell["dollars_over"] = -delta
+    return cell
+
+
+def _income_row(name: str, blk: dict, is_group: bool) -> dict:
+    """View row for a `bill_rate` engagement. Month view is the $ meter; day/week
+    stay track-style hour cells (no weekly $ cap in v1)."""
+    mtd = blk.get("mtd", {})
+    return {
+        "name": name,
+        "is_group": is_group,
+        "track_only": False,
+        "income_mode": True,
+        "bill_rate": blk.get("bill_rate"),
+        "today_h": round(blk.get("today_h", 0) or 0, 1),
+        "d7_h": round(blk.get("7d", {}).get("actual_h", 0) or 0, 1),
+        "meeting_h": round(blk.get("meeting_h", 0) or 0, 1),
+        "day":   _window(blk.get("today_h", 0) or 0, None),
+        "week":  _window(blk.get("wtd", {}).get("actual_h", 0) or 0, None),
+        "month": _income_month(mtd.get("billed", 0) or 0, blk.get("monthly_cap_value")),
+        "overlap": [],
+    }
+
+
 def _row(name: str, blk: dict, is_group: bool) -> dict:
+    if blk.get("income_mode"):
+        return _income_row(name, blk, is_group)
     track_only = bool(blk.get("track_only")) and not is_group
     return {
         "name": name,

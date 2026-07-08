@@ -51,6 +51,47 @@ def test_menu_lines_groups_engagements_and_track_only():
     assert None in lines, "expected separator markers (None)"
 
 
+# --- income-meter mode (issue #38) ----------------------------------------
+
+INCOME_STATE = {
+    "engagements": {
+        "MeterCap": {"income_mode": True, "bill_rate": 200, "monthly_cap_value": 10000,
+                     "today_h": 1.5, "wtd": {"actual_h": 8.0}, "7d": {"actual_h": 9.0},
+                     "30d": {"actual_h": 40.0},
+                     "mtd": {"actual_h": 31.25, "billed": 6250, "dollars_left": 3750, "over": False}},
+        "MeterOnly": {"income_mode": True, "bill_rate": 200, "monthly_cap_value": None,
+                      "today_h": 0.5, "wtd": {"actual_h": 3.0}, "7d": {"actual_h": 4.0},
+                      "30d": {"actual_h": 20.0},
+                      "mtd": {"actual_h": 15.0, "billed": 3000}},
+    },
+    "generated_at": "2026-07-08T11:00:00",
+}
+
+
+def test_fmt_dollars_has_thousands_separator():
+    assert fc.fmt_dollars(6250) == "$6,250"
+    assert fc.fmt_dollars(10000) == "$10,000"
+
+
+def test_menu_lines_income_cap_shows_dollars_and_remaining():
+    lines = [l for l in fc.menu_lines(INCOME_STATE) if l]
+    text = "\n".join(lines)
+    assert "MeterCap" in text
+    assert "$6,250" in text and "$10,000" in text
+    assert "$3,750 left" in text
+    # income rows must NOT print an hour cap line ("cap ...h/wk")
+    assert not any("MeterCap" in l and "h/wk" in l for l in lines)
+
+
+def test_menu_lines_income_pure_meter_shows_running_dollars_no_bar():
+    lines = [l for l in fc.menu_lines(INCOME_STATE) if l]
+    text = "\n".join(lines)
+    assert "MeterOnly" in text
+    assert "$3,000" in text
+    # a pure meter has no ceiling, so no "/$" fraction and no left/over verdict
+    assert not any("MeterOnly" in l for l in lines if "left" in l or "OVER" in l)
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

@@ -1,11 +1,17 @@
 # Per-engagement time budget + roll-up groups. Hand-maintained.
 #
-# An engagement is one of three flavors:
-#   rate-mode   monthly_value + target_rate  -> derived cap
-#               (weekly_cap = monthly_value / target_rate / 4.33)
-#   hours-mode  weekly_hours and/or monthly_hours -> direct cap
-#   track-only  neither -> shown and rolled up, but no cap and no bar.
-#               Use `bucket:` to map a pretty name to its registry leaf.
+# An engagement is one of four flavors:
+#   rate-mode    monthly_value + target_rate  -> derived hour cap
+#                (weekly_cap = monthly_value / target_rate / 4.33)
+#   hours-mode   weekly_hours and/or monthly_hours -> direct hour cap
+#   income-mode  bill_rate ($/hr) -> meters $ billed for the calendar month
+#                ($ = month-to-date hours × bill_rate). Optional monthly_cap_value
+#                ($/mo) adds a dollar ceiling ("$X left" / "OVER $X"); omit it for a
+#                pure running meter (no bar). The inverse of rate-mode: it keeps the
+#                dollars instead of dividing them into an hour cap. Don't combine
+#                bill_rate with the hour-cap keys — that's a loud preflight error.
+#   track-only   none of the above -> shown and rolled up, but no cap and no bar.
+#                Use `bucket:` to map a pretty name to its registry leaf.
 #
 # Groups bundle engagements under one aggregate cap. `members: "*"` means every
 # defined engagement. (Legacy configs with a top-level `total_budget:` instead of
@@ -21,6 +27,13 @@ engagements:
   RetainerClient:
     monthly_value: 5000        # rate-mode — $/mo + your target $/hr derives the cap
     target_rate:   250
+
+  HourlyClient:
+    bill_rate: 200             # income-mode with a cap — meters $ billed this month
+    monthly_cap_value: 10000   # ...toward a $10k/mo ceiling ("$X left" / "OVER $X")
+
+  MeterClient:
+    bill_rate: 150             # income-mode, pure meter — running $ billed, no ceiling
 
   Personal:
     bucket: personal           # track-only — no cap, just visibility + roll-up

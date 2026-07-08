@@ -61,13 +61,22 @@ def week_start(now: datetime) -> datetime:
     return candidate
 
 
+def month_start(now: datetime) -> datetime:
+    """First of the current month at 00:00 local. The income meter (#38) bills by
+    calendar month-to-date — resets on the 1st, matching monthly invoicing — NOT a
+    rolling 30d window (which never resets and drifts against a monthly cap)."""
+    return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
 def windows() -> dict[str, tuple[datetime, datetime]]:
-    """today / wtd / 7d / 30d windows, tz-aware. wtd = Monday 8am → now."""
+    """today / wtd / mtd / 7d / 30d windows, tz-aware. wtd = Monday 8am → now;
+    mtd = 1st of month 00:00 → now (income meter, #38)."""
     now = datetime.now(LOCAL_TZ)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     return {
         "today": (today_start, now),
         "wtd":   (week_start(now), now),
+        "mtd":   (month_start(now), now),
         "7d":    (now - timedelta(days=7), now),
         "30d":   (now - timedelta(days=30), now),
     }
@@ -489,6 +498,60 @@ def remaining_or_over(actual_h: float, cap_h: float) -> dict:
     return {"hours_over": round(-delta, 1), "over": True}
 
 
+# --- income-meter mode (#38) -----------------------------------------------
+# The inverse of rate-mode: instead of dividing a dollar value into an hour cap,
+# income mode meters cumulative $ billed for the calendar month ($ = MTD hours ×
+# bill_rate), with an optional dollar ceiling. `bill_rate` selects it.
+
+def is_income_mode(cfg: dict) -> bool:
+    """True when this engagement meters dollars (has an explicit bill_rate), rather
+    than resolving to an hour cap. Income engagements are handled separately in
+    main() and never pass through engagement_caps."""
+    return "bill_rate" in cfg
+
+
+def income_billed(actual_h: float, bill_rate: float) -> float:
+    """Dollars billed = hours worked × $/hr. The running-meter value."""
+    return actual_h * bill_rate
+
+
+def dollars_remaining_or_over(billed: float, cap_value: float) -> dict:
+    """The $ analog of remaining_or_over: $ left under a monthly ceiling, or $ over
+    it. Rounded to whole dollars (the card shows e.g. '$1,750 left' / 'OVER $1,000')."""
+    delta = cap_value - billed
+    if delta >= 0:
+        return {"dollars_left": round(delta), "over": False}
+    return {"dollars_over": round(-delta), "over": True}
+
+
+def appetite_errors(appetite: dict[str, dict]) -> list[str]:
+    """Config errors that MUST halt the snapshot rather than silently mismeter (#38).
+
+    Income-mode (`bill_rate`) and the hour-cap vocabularies (`monthly_value`/
+    `target_rate` rate-mode, or `weekly_hours`/`monthly_hours` hours-mode) compute
+    in opposite directions, so an engagement declaring both is ambiguous — reject
+    it loudly instead of guessing. `monthly_cap_value` without `bill_rate` is also
+    rejected (a dollar ceiling with no rate can't be metered)."""
+    hour_cap_keys = ("monthly_value", "target_rate", "weekly_hours", "monthly_hours")
+    errs: list[str] = []
+    for name, cfg in appetite.items():
+        cfg = cfg or {}
+        if is_income_mode(cfg):
+            clash = [k for k in hour_cap_keys if k in cfg]
+            if clash:
+                errs.append(
+                    f"engagement '{name}' mixes income-mode (bill_rate) with hour-cap "
+                    f"keys ({', '.join(clash)}) — pick one: bill_rate for a $ meter, or "
+                    f"monthly_value+target_rate / weekly_hours for an hour cap."
+                )
+        elif "monthly_cap_value" in cfg:
+            errs.append(
+                f"engagement '{name}' sets monthly_cap_value without bill_rate — a $ "
+                f"ceiling needs a bill_rate ($/hr) to meter against."
+            )
+    return errs
+
+
 def _full_path_for(rolled: dict[str, float], leaf: str) -> str | None:
     """The full dotted path in `rolled` whose last segment is `leaf` (or None)."""
     for path_str in rolled:
@@ -592,15 +655,48 @@ def main() -> None:
     meeting_wtd = meeting_path_minutes(meetings, *wins["wtd"])
 
     appetite = load_appetite()
+    # Loud preflight: a config that mixes income-mode with hour-cap vocabularies (or a
+    # dollar ceiling with no rate) would silently mismeter — halt with a clear message
+    # rather than write wrong numbers (#38). A nonzero exit lands in pulse.stderr.log.
+    errs = appetite_errors(appetite)
+    if errs:
+        raise SystemExit("appetite.yaml config error: " + "; ".join(errs))
     engagement_state: dict[str, dict] = {}
     for name, cfg in appetite.items():
         cfg = cfg or {}
         bucket = cfg.get("bucket", name)          # display name may differ from the ugly leaf
-        weekly_cap, monthly_cap = engagement_caps(cfg)
         h_today = find_hours(by_window["today"], bucket)
         h_wtd   = find_hours(by_window["wtd"],   bucket)
         h_7d    = find_hours(by_window["7d"],    bucket)
         h_30d   = find_hours(by_window["30d"],   bucket)
+        if is_income_mode(cfg):
+            # Income meter: $ billed for the calendar month (MTD hours × rate), with
+            # an optional $ ceiling. Not an hour cap — day/week rows stay hours (no
+            # weekly $ cap in v1); the dollar meter lives in the month view.
+            bill_rate = float(cfg["bill_rate"])
+            cap_value = cfg.get("monthly_cap_value")
+            h_mtd = find_hours(by_window["mtd"], bucket)
+            billed = income_billed(h_mtd, bill_rate)
+            st_inc: dict = {
+                "bucket":            bucket,
+                "income_mode":       True,
+                "track_only":        False,
+                "bill_rate":         bill_rate,
+                "monthly_cap_value": float(cap_value) if cap_value is not None else None,
+                "weekly_cap_h":      None,
+                "monthly_cap_h":     None,
+                "today_h":           round(h_today, 2),
+                "meeting_h":         round(find_hours(meeting_wtd, bucket), 2),
+                "wtd": {"actual_h": round(h_wtd, 2)},
+                "7d":  {"actual_h": round(h_7d,  2)},
+                "30d": {"actual_h": round(h_30d, 2)},
+                "mtd": {"actual_h": round(h_mtd, 2), "billed": round(billed)},
+            }
+            if cap_value is not None:
+                st_inc["mtd"].update(dollars_remaining_or_over(billed, float(cap_value)))
+            engagement_state[name] = st_inc
+            continue
+        weekly_cap, monthly_cap = engagement_caps(cfg)
         st: dict = {
             "bucket":        bucket,
             "track_only":    weekly_cap is None and monthly_cap is None,
@@ -718,6 +814,15 @@ def main() -> None:
     print(f"sessions: {len(confident_sessions)} confident, {len(needs_llm_sessions)} needs_llm")
     for name, st in engagement_state.items():
         wtd = st["wtd"]
+        if st.get("income_mode"):
+            mtd = st["mtd"]
+            cap = st.get("monthly_cap_value")
+            if cap:
+                d = f"OVER ${mtd['dollars_over']:,}" if mtd.get("over") else f"${mtd['dollars_left']:,} left"
+                print(f"  {name:18} mtd ${mtd['billed']:,}/${cap:,.0f}  {d}")
+            else:
+                print(f"  {name:18} mtd ${mtd['billed']:,}  (running meter, ${st['bill_rate']:,.0f}/hr)")
+            continue
         if st.get("track_only"):
             print(f"  {name:18} wtd {wtd['actual_h']:5.1f}h  (tracked, no cap)")
             continue
