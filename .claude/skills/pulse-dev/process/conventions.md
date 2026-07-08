@@ -53,6 +53,10 @@ Settled traps. When the work risks one, cite it in the issue/PR rather than redi
 - **Privacy / session data is sensitive.** Pulse reads Claude Code session JSONL; never log or commit
   raw session content or paths that leak client names (issue #8 was a privacy scrub + history
   rewrite). Scrub before committing fixtures or logs.
+- **docs/ is tracked (since #43) but the repo is PUBLIC.** Specs/plans land in `docs/specs/` /
+  `docs/plans/` and MUST be scrubbed — no client names, rates, or dollar figures. Five legacy
+  pre-public design docs carry real client billing data and are explicitly gitignored; never
+  `git add -f` them or drop their ignore entries.
 
 ## Explicitly NOT part of this process
 No release tracks, no marketplace/deploy, no milestones-as-queue, no version-bump ceremony, no

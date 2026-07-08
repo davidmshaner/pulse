@@ -31,6 +31,10 @@ ready and isn't.
    `frontend_common.py`); **scanners** (`scan_sessions.py`, `scan_cowork.py`); **classifier**
    (`timecore/classify.py`, `prematch.py`). Two cards in one neighborhood **cannot fire in the
    same wave** — they collide at merge even from separate worktrees.
+   **`CHANGELOG.md` `[Unreleased]` is a universal collision point** — every behavior-change PR
+   adds a line there, so any two such PRs conflict at merge no matter their neighborhoods. Don't
+   let it block a wave; it just means the merge tail serializes with a trivial one-file rebase
+   per PR (keep both entries, newest first).
 3. **Review/merge capacity.** One `main`, one human. N PRs serialize at the merge queue and each
    wants `/code-review` + a real QA pass (run the actual app). Don't queue more than can be
    shepherded.
