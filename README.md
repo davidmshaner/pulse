@@ -36,6 +36,10 @@ products, or just want to know where the day went.
 <!-- RECENT:START -->
 ## What's New
 
+**0.2.1** — 2026-07-08
+- _Fixed:_ Nested group cards indent as a whole — border, title, bar, and sub-line shift together by depth — so hierarchy reads as containment instead of a floating title (#50).
+- _Fixed:_ Update banner no longer shows a false "update available" on an up-to-date clone: if local HEAD changed since the last check and mismatches the 6h-cached remote sha (the user pulled past a stale cache), the check refreshes the remote before deciding instead of trusting the cache — a genuinely-behind clone still never refetches per-snapshot (#49).
+
 **0.2.0** — 2026-07-08
 - _Added:_ Income-meter engagement flavor: `bill_rate: <$/hr>` in `appetite.yaml` meters cumulative dollars billed for the calendar month (`$ = month-to-date hours × rate`) instead of dividing a dollar value into an hour cap. `bill_rate` alone is a pure running meter (`$6,250 mo`, no bar); adding `monthly_cap_value: <$>` shows progress toward the ceiling with `$X left` / `OVER $X`, mirroring hour caps. The meter is monthly (resets on the 1st, matching invoicing); day/week rows keep hours. Mixing income-mode with the hour-cap vocabularies (`monthly_value`/`target_rate`/`weekly_hours`) — or a `monthly_cap_value` with no `bill_rate` — is a loud preflight error, never a silent miscount (#38).
 - _Added:_ Panel period toggle gains a third `day` segment (day · week · month) — clicking `day` switches every engagement/group row to today's hours. A day has no cap, so day rows render track-style (hours, no bar) and the choice persists across panel reopens like week/month (#39).
