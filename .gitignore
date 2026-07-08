@@ -19,3 +19,11 @@ uncategorized.tmp
 
 # Python venv created by install-mac.sh (deps for the LaunchAgent)
 .venv/
+
+# Legacy pre-public design docs — contain real client names/rates; local only.
+# New specs/plans under docs/ are tracked; scrub before committing (issue #8).
+docs/plans/2026-06-12-pulse-rich-panel.md
+docs/plans/2026-06-13-package-refactor.md
+docs/specs/2026-06-12-pulse-relaunch-design.md
+docs/specs/2026-06-13-package-refactor-design.md
+docs/superpowers/
