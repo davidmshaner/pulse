@@ -89,6 +89,13 @@ function bar(pct, status){
 function fig(h){ return (h===null||h===undefined)?'–':h.toFixed(1)+'h'; }
 function dollars(v){ return (v===null||v===undefined)?'–':'$'+Math.round(v).toLocaleString('en-US'); }
 
+function nameSpan(e){
+  // Nested groups (#31) indent by depth. depth 0/absent -> no style attribute, so a
+  // flat config's rendered DOM is byte-identical to before nesting existed.
+  var pad = e.depth ? ' style="padding-left:'+(e.depth*14)+'px"' : '';
+  return '<span class="name"'+pad+'>'+e.name+'</span>';
+}
+
 function headHTML(title, toggleView, toggleLabel){
   return '<div class="head"><span class="verdict">'+title+'</span>'
     + '<span class="toggle" onclick="setView(\''+toggleView+'\')">'+toggleLabel+'</span></div>';
@@ -102,7 +109,7 @@ function dayRowHTML(e){
   // A day has no cap, so every row renders track-style (today's hours, no bar).
   var cls = 'row' + (e.is_group ? ' total' : '');
   return '<div class="'+cls+'"><div class="top">'
-    + '<span class="name">'+e.name+'</span>'
+    + nameSpan(e)
     + '<span class="figs">'+fig(e.day.actual_h)+' today</span></div>'
     + '<div class="sub"><span class="trk">tracked</span>'
     + '<span>7d '+fig(e.d7_h)+'</span></div></div>';
@@ -114,7 +121,7 @@ function incomeRowHTML(e){
   var cls = 'row' + (e.is_group ? ' total' : '');
   if(WINDOW==='week'){
     return '<div class="'+cls+'"><div class="top">'
-      + '<span class="name">'+e.name+'</span>'
+      + nameSpan(e)
       + '<span class="figs">'+fig(e.week.actual_h)+' wk</span></div>'
       + '<div class="sub"><span class="trk">tracked</span>'
       + '<span>today '+fig(e.today_h)+'</span>'
@@ -124,7 +131,7 @@ function incomeRowHTML(e){
   if(m.cap_value===null||m.cap_value===undefined){
     // pure running meter — $ billed so far this month, no ceiling, no bar
     return '<div class="'+cls+'"><div class="top">'
-      + '<span class="name">'+e.name+'</span>'
+      + nameSpan(e)
       + '<span class="figs">'+dollars(m.billed)+' mo</span></div>'
       + '<div class="sub"><span class="trk">'+dollars(e.bill_rate)+'/hr meter</span>'
       + '<span>today '+fig(e.today_h)+'</span>'
@@ -132,7 +139,7 @@ function incomeRowHTML(e){
   }
   var verdict = m.over ? dollars(m.dollars_over)+' over' : dollars(m.dollars_left)+' left';
   return '<div class="'+cls+'">'
-    + '<div class="top"><span class="name">'+e.name+'</span>'
+    + '<div class="top">' + nameSpan(e)
     + '<span class="figs">'+dollars(m.billed)+' / '+dollars(m.cap_value)+' mo</span></div>'
     + bar(m.pct, m.status)
     + '<div class="sub"><span>'+verdict+'</span>'
@@ -148,7 +155,7 @@ function rowHTML(e){
   var cls = 'row' + (e.is_group ? ' total' : '');
   if(e.track_only){
     return '<div class="'+cls+'"><div class="top">'
-      + '<span class="name">'+e.name+'</span>'
+      + nameSpan(e)
       + '<span class="figs">'+fig(w.actual_h)+' '+unit+'</span></div>'
       + '<div class="sub"><span class="trk">tracked</span>'
       + '<span>today '+fig(e.today_h)+'</span>'
@@ -159,7 +166,7 @@ function rowHTML(e){
   var mtg = (e.meeting_h && e.meeting_h > 0)
           ? '<span class="mtg">mtg '+fig(e.meeting_h)+'</span>' : '';
   return '<div class="'+cls+'">'
-    + '<div class="top"><span class="name">'+e.name+'</span>'
+    + '<div class="top">' + nameSpan(e)
     + '<span class="figs">'+fig(w.actual_h)+' / '+fig(w.cap_h)+' '+unit+'</span></div>'
     + bar(w.pct, w.status)
     + '<div class="sub"><span>'+verdict+'</span>'

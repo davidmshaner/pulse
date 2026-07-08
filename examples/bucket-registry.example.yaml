@@ -5,3 +5,13 @@ buckets:
     display_name: Example Client
     source_path: /Users/CHANGEME/work/example-client
     engagement_type: cash
+
+  # SPLITTING A BUCKET: carve a sub-folder out of a catch-all into its own child.
+  # Each child's `source_path` MUST be under its parent's path (deepest match wins,
+  # so work under the child path lands in the child, the rest stays in the parent).
+  # A child path outside the parent is a loud config error, not a silent miscount.
+  - name: Personal
+    source_path: /Users/CHANGEME/personal
+    children:
+      - name: PulseWork
+        source_path: /Users/CHANGEME/personal/pulse   # subpath of the parent ✓

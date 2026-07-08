@@ -14,8 +14,14 @@
 #                Use `bucket:` to map a pretty name to its registry leaf.
 #
 # Groups bundle engagements under one aggregate cap. `members: "*"` means every
-# defined engagement. (Legacy configs with a top-level `total_budget:` instead of
-# `groups:` still work — it's read as a single "Billable" group over all members.)
+# defined engagement. A member may ALSO name another group (recursive members), so
+# groups nest into a hierarchy that ladders up to higher-level totals — the tree
+# reads top-down in this file. A group with no cap (`weekly_hours`/`monthly_hours`
+# omitted) is a pure roll-up: it shows summed hours with no bar. An engagement
+# reachable via more than one path is counted once; an unknown member, a membership
+# cycle, or a nesting that would double-count is a loud config error, not a silent
+# miscount. (Legacy configs with a top-level `total_budget:` instead of `groups:`
+# still work — it's read as a single "Billable" group over all members.)
 
 engagements:
   ClientA:
@@ -40,10 +46,12 @@ engagements:
 
 groups:
   Billable:
-    members: [ClientA, ClientB, RetainerClient]
+    members: [ClientA, ClientB, RetainerClient]   # engagements
     weekly_hours:  20
     monthly_hours: 86
-  "All Work":
-    members: "*"               # everything, incl. Personal
+  "Personal Software":         # a capless roll-up — summed hours, no bar
+    members: [Personal]
+  "All Work":                  # NESTED: members name GROUPS, laddering up the tree
+    members: ["Billable", "Personal Software"]    # (Billable's 3 clients + Personal)
     weekly_hours:  30
     monthly_hours: 130

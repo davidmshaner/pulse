@@ -524,14 +524,22 @@ def dollars_remaining_or_over(billed: float, cap_value: float) -> dict:
     return {"dollars_over": round(-delta), "over": True}
 
 
-def appetite_errors(appetite: dict[str, dict]) -> list[str]:
-    """Config errors that MUST halt the snapshot rather than silently mismeter (#38).
+def appetite_errors(appetite: dict[str, dict], groups=None,
+                    registry_buckets=None) -> list[str]:
+    """Config errors that MUST halt the snapshot rather than silently mismeter.
 
-    Income-mode (`bill_rate`) and the hour-cap vocabularies (`monthly_value`/
-    `target_rate` rate-mode, or `weekly_hours`/`monthly_hours` hours-mode) compute
-    in opposite directions, so an engagement declaring both is ambiguous — reject
-    it loudly instead of guessing. `monthly_cap_value` without `bill_rate` is also
-    rejected (a dollar ceiling with no rate can't be metered)."""
+    Engagement-mode (#38): income-mode (`bill_rate`) and the hour-cap vocabularies
+    (`monthly_value`/`target_rate` rate-mode, or `weekly_hours`/`monthly_hours`
+    hours-mode) compute in opposite directions, so an engagement declaring both is
+    ambiguous — reject it. `monthly_cap_value` without `bill_rate` is rejected too
+    (a dollar ceiling with no rate can't be metered).
+
+    Nested groups (#31): when `groups` (a {name: members} map) is given, reject an
+    unknown member, a membership cycle, and any rollup that would double-count an
+    engagement (reachable via a group and that group's ancestor, or via two
+    sub-groups). When `registry_buckets` is given, reject a `children:` bucket whose
+    source_path is not under its parent's. Both default off, so existing single-arg
+    callers are unaffected."""
     hour_cap_keys = ("monthly_value", "target_rate", "weekly_hours", "monthly_hours")
     errs: list[str] = []
     for name, cfg in appetite.items():
@@ -549,6 +557,14 @@ def appetite_errors(appetite: dict[str, dict]) -> list[str]:
                 f"engagement '{name}' sets monthly_cap_value without bill_rate — a $ "
                 f"ceiling needs a bill_rate ($/hr) to meter against."
             )
+    if groups is not None:
+        errs += _group_member_errors(groups, appetite.keys())
+        cycles = _group_cycle_errors(groups)
+        errs += cycles
+        if not cycles:      # the double-count walk assumes no cycle (else it can't terminate)
+            errs += _group_double_count_errors(groups, appetite.keys())
+    if registry_buckets is not None:
+        errs += registry_child_path_errors(registry_buckets)
     return errs
 
 
@@ -605,6 +621,227 @@ def _group_overlap(members: list[str], engagement_state: dict, rolled: dict[str,
     return warnings
 
 
+# --- nested groups (#31) ---------------------------------------------------
+# A group's `members` may name OTHER groups as well as engagements (recursive,
+# no new field). These pure helpers resolve a group to its transitive engagement
+# set, order the group forest for indented rendering, and build one group block.
+
+def _is_wildcard(members) -> bool:
+    return members in ("*", ["*"])
+
+
+def resolve_group_engagements(name, groups_by_name, engagement_names, seen=None):
+    """The ordered, de-duplicated list of engagements a group transitively contains.
+
+    `groups_by_name` maps group name -> its `members` list (each member is an
+    engagement name or another group name). A member that is a group expands to
+    that group's engagements (recursively, in file order); a member that is an
+    engagement is included directly; anything else is skipped. An engagement
+    reachable via more than one path is counted ONCE — the summed rollup must
+    never double-count. `seen` guards against membership cycles (a config error
+    caught by validation) so resolution always terminates."""
+    seen = seen or set()
+    if name in seen:
+        return []
+    seen = seen | {name}
+    members = groups_by_name.get(name)
+    if _is_wildcard(members):
+        return list(engagement_names)
+    eng_set = set(engagement_names)
+    out: list[str] = []
+    for m in (members or []):
+        if m in groups_by_name:
+            out.extend(resolve_group_engagements(m, groups_by_name, engagement_names, seen))
+        elif m in eng_set:
+            out.append(m)
+    return list(dict.fromkeys(out))            # dedupe, preserve first occurrence
+
+
+def group_tree_order(groups):
+    """DFS pre-order of the group forest as (name, depth) pairs, driving indented
+    rendering. A group named as a member by another group is rendered only under
+    its parent (indented), never also at top level; roots are groups referenced by
+    no other group, kept in definition order. Cycle-safe. For a FLAT config (no
+    group names another group) every group is a depth-0 root in definition order —
+    identical to the pre-nesting layout."""
+    groups_by_name = {g["name"]: (g.get("members") or []) for g in groups}
+    referenced = set()
+    for g in groups:
+        members = g.get("members")
+        if _is_wildcard(members):
+            continue
+        for m in (members or []):
+            if m in groups_by_name:
+                referenced.add(m)
+    ordered: list[tuple[str, int]] = []
+
+    def visit(name, depth, seen):
+        if name in seen:
+            return
+        seen = seen | {name}
+        ordered.append((name, depth))
+        members = groups_by_name.get(name)
+        if _is_wildcard(members):
+            return
+        for m in (members or []):
+            if m in groups_by_name:
+                visit(m, depth + 1, seen)
+
+    for g in groups:
+        if g["name"] not in referenced:
+            visit(g["name"], 0, set())
+    return ordered
+
+
+def build_group_block(name, present, engagement_state, weekly_cap_h,
+                      monthly_cap_h, depth=0):
+    """One group's state block: its members' summed hours per window, its caps
+    (or None -> a capless roll-up that renders track-style), and its nesting
+    depth. `present` is the resolved, de-duplicated engagement list, so the sum
+    counts each leaf once. Cap math mirrors the flat-group path exactly, so a
+    depth-0 capped group is byte-identical to before nested groups existed."""
+    sum_today = sum(engagement_state[m]["today_h"]         for m in present)
+    sum_wtd   = sum(engagement_state[m]["wtd"]["actual_h"]  for m in present)
+    sum_7d    = sum(engagement_state[m]["7d"]["actual_h"]   for m in present)
+    sum_30d   = sum(engagement_state[m]["30d"]["actual_h"]  for m in present)
+    capless = not weekly_cap_h and not monthly_cap_h
+    block: dict = {
+        "name":          name,
+        "members":       present,
+        "depth":         depth,
+        "weekly_cap_h":  None if capless else float(weekly_cap_h or 0),
+        "monthly_cap_h": None if capless else float(monthly_cap_h or 0),
+        "today_h":       round(sum_today, 2),
+    }
+    if capless:
+        # No cap -> a pure roll-up: hours only, no bar, no over/left verdict.
+        block["track_only"] = True
+        block["wtd"] = {"actual_h": round(sum_wtd, 2)}
+        block["7d"]  = {"actual_h": round(sum_7d,  2)}
+        block["30d"] = {"actual_h": round(sum_30d, 2)}
+    else:
+        wk = float(weekly_cap_h or 0)
+        mo = float(monthly_cap_h or 0)
+        block["wtd"] = {"actual_h": round(sum_wtd, 2), **remaining_or_over(sum_wtd, wk)}
+        block["7d"]  = {"actual_h": round(sum_7d,  2), **remaining_or_over(sum_7d,  wk)}
+        block["30d"] = {"actual_h": round(sum_30d, 2), **remaining_or_over(sum_30d, mo)}
+    return block
+
+
+def _group_member_errors(groups_by_name, engagement_names) -> list[str]:
+    """A group member must name a defined engagement or another defined group."""
+    eng = set(engagement_names)
+    gnames = set(groups_by_name)
+    errs: list[str] = []
+    for name, members in groups_by_name.items():
+        if _is_wildcard(members):
+            continue
+        for m in (members or []):
+            if m not in eng and m not in gnames:
+                errs.append(
+                    f"group '{name}' has unknown member '{m}' — not a defined "
+                    f"engagement or group."
+                )
+    return errs
+
+
+def _group_cycle_errors(groups_by_name) -> list[str]:
+    """A group must not (transitively) contain itself — a membership cycle would
+    make its rollup ill-defined. Reports each distinct cycle once."""
+    errs: list[str] = []
+    seen_cycles: set[frozenset] = set()
+
+    def dfs(name, stack):
+        if name in stack:
+            cyc = stack[stack.index(name):] + [name]
+            key = frozenset(cyc)
+            if key not in seen_cycles:
+                seen_cycles.add(key)
+                errs.append(f"group membership cycle: {' -> '.join(cyc)}")
+            return
+        members = groups_by_name.get(name)
+        if _is_wildcard(members):
+            return
+        for m in (members or []):
+            if m in groups_by_name:
+                dfs(m, stack + [name])
+
+    for name in groups_by_name:
+        dfs(name, [])
+    return errs
+
+
+def _group_double_count_errors(groups_by_name, engagement_names) -> list[str]:
+    """A group must not count any engagement more than once — reachable both
+    directly and through a sub-group (ancestor/descendant), or via two sub-groups.
+    Summing such a config double-counts the rollup, so reject it loudly. Assumes
+    no cycles (checked first, so the multiset walk terminates)."""
+    eng = set(engagement_names)
+    errs: list[str] = []
+
+    def expand(name, seen):
+        if name in seen:
+            return []
+        seen = seen | {name}
+        members = groups_by_name.get(name)
+        if _is_wildcard(members):
+            return []
+        out: list[str] = []
+        for m in (members or []):
+            if m in groups_by_name:
+                out.extend(expand(m, seen))
+            elif m in eng:
+                out.append(m)
+        return out
+
+    for name in groups_by_name:
+        counts: dict[str, int] = {}
+        for e in expand(name, set()):
+            counts[e] = counts.get(e, 0) + 1
+        for e, n in counts.items():
+            if n > 1:
+                errs.append(
+                    f"group '{name}' counts engagement '{e}' more than once "
+                    f"(reachable via multiple members) — this double-counts its "
+                    f"rollup; a member should belong to only one path."
+                )
+    return errs
+
+
+def registry_child_path_errors(buckets) -> list[str]:
+    """A registry `children:` bucket must live INSIDE its parent's source_path —
+    splitting a bucket carves sub-paths out of it, so a child path not under the
+    parent would silently miscount. Recurses to grandchildren."""
+    errs: list[str] = []
+
+    def walk(bs):
+        for b in bs:
+            parent = (b.get("source_path") or "").rstrip("/")
+            for c in (b.get("children") or []):
+                cp = (c.get("source_path") or "").rstrip("/")
+                if parent and cp and not cp.startswith(parent + "/"):
+                    errs.append(
+                        f"registry bucket '{c.get('name')}' source_path '{cp}' is "
+                        f"not under its parent '{b.get('name')}' ('{parent}') — a "
+                        f"child bucket must live inside its parent's path."
+                    )
+            walk(b.get("children") or [])
+
+    walk(buckets or [])
+    return errs
+
+
+def load_registry_buckets() -> list | None:
+    """Top-level registry buckets (for the child-subpath check), or None when the
+    registry file is absent/unreadable — validation then skips the registry rule."""
+    try:
+        with open(config.REGISTRY) as f:
+            data = yaml.safe_load(f) or {}
+    except (OSError, yaml.YAMLError):
+        return None
+    return data.get("buckets")
+
+
 # --- main ------------------------------------------------------------------
 
 def main() -> None:
@@ -655,12 +892,17 @@ def main() -> None:
     meeting_wtd = meeting_path_minutes(meetings, *wins["wtd"])
 
     appetite = load_appetite()
-    # Loud preflight: a config that mixes income-mode with hour-cap vocabularies (or a
-    # dollar ceiling with no rate) would silently mismeter — halt with a clear message
-    # rather than write wrong numbers (#38). A nonzero exit lands in pulse.stderr.log.
-    errs = appetite_errors(appetite)
+    groups_list = load_groups()
+    groups_by_name = {g["name"]: g.get("members") for g in groups_list}
+    # Loud preflight: a config that mixes income-mode with hour-cap vocabularies (a
+    # dollar ceiling with no rate), an unknown/cyclic/double-counting group member
+    # (#31), or a registry child bucket outside its parent (#31) would silently
+    # mismeter — halt with a clear message rather than write wrong numbers. A nonzero
+    # exit lands in pulse.stderr.log.
+    errs = appetite_errors(appetite, groups=groups_by_name,
+                           registry_buckets=load_registry_buckets())
     if errs:
-        raise SystemExit("appetite.yaml config error: " + "; ".join(errs))
+        raise SystemExit("config error: " + "; ".join(errs))
     engagement_state: dict[str, dict] = {}
     for name, cfg in appetite.items():
         cfg = cfg or {}
@@ -727,30 +969,21 @@ def main() -> None:
                  for n in engagement_state}
         apply_remainder(engagement_state, canon, remainder_names)
 
-    # User-defined roll-up groups. Each sums its member engagements (NOT every
-    # bucket) against a hand-set aggregate cap. '*' = every defined engagement.
+    # User-defined roll-up groups (#31: nested). A group's members may name other
+    # groups as well as engagements; resolution expands sub-groups into their leaf
+    # engagements (de-duplicated, so nothing is double-counted) and the forest is
+    # emitted in tree order with a `depth` for indented rendering. A flat config
+    # (no group names another group) is depth-0 in definition order — the same rows
+    # as before nesting existed. '*' = every defined engagement.
     group_blocks: list[dict] = []
-    for g in load_groups():
-        members = (list(engagement_state.keys())
-                   if g.get("members") in ("*", ["*"])
-                   else [m for m in (g.get("members") or [])])
-        present = [m for m in members if m in engagement_state]
-        wk_cap = float(g.get("weekly_hours",  0))
-        mo_cap = float(g.get("monthly_hours", 0))
-        sum_today = sum(engagement_state[m]["today_h"]        for m in present)
-        sum_wtd   = sum(engagement_state[m]["wtd"]["actual_h"] for m in present)
-        sum_7d    = sum(engagement_state[m]["7d"]["actual_h"]  for m in present)
-        sum_30d   = sum(engagement_state[m]["30d"]["actual_h"] for m in present)
-        block = {
-            "name":          g["name"],
-            "members":       present,
-            "weekly_cap_h":  wk_cap,
-            "monthly_cap_h": mo_cap,
-            "today_h":       round(sum_today, 2),
-            "wtd": {"actual_h": round(sum_wtd, 2), **remaining_or_over(sum_wtd, wk_cap)},
-            "7d":  {"actual_h": round(sum_7d,  2), **remaining_or_over(sum_7d,  wk_cap)},
-            "30d": {"actual_h": round(sum_30d, 2), **remaining_or_over(sum_30d, mo_cap)},
-        }
+    gdef_by_name = {g["name"]: g for g in groups_list}
+    eng_names = list(engagement_state.keys())
+    for name, depth in group_tree_order(groups_list):
+        gdef = gdef_by_name[name]
+        present = resolve_group_engagements(name, groups_by_name, eng_names)
+        block = build_group_block(name, present, engagement_state,
+                                  gdef.get("weekly_hours"), gdef.get("monthly_hours"),
+                                  depth)
         # Soft overlap guard: if one member's bucket path is an ancestor of another's,
         # the sum double-counts. Detect via the resolved 30d paths and warn (never crash).
         overlap = _group_overlap(present, engagement_state, by_window["30d"])
@@ -830,10 +1063,14 @@ def main() -> None:
         print(f"  {name:18} wtd {wtd['actual_h']:5.1f}/{st['weekly_cap_h']:>4.1f}h  {status}")
     for g in group_blocks:
         wtd = g["wtd"]
-        status = f"OVER {wtd['hours_over']}h" if wtd["over"] else f"{wtd['hours_left']}h left"
-        print(f"  [{g['name']:16}] wtd {wtd['actual_h']:5.1f}/{g['weekly_cap_h']:>4.1f}h  {status}")
+        indent = "  " * g.get("depth", 0)
+        if g.get("weekly_cap_h") is None:      # capless nested roll-up — hours only
+            print(f"  {indent}[{g['name']:16}] wtd {wtd['actual_h']:5.1f}h  (rolls up, no cap)")
+        else:
+            status = f"OVER {wtd['hours_over']}h" if wtd["over"] else f"{wtd['hours_left']}h left"
+            print(f"  {indent}[{g['name']:16}] wtd {wtd['actual_h']:5.1f}/{g['weekly_cap_h']:>4.1f}h  {status}")
         for w in g.get("overlap", []):
-            print(f"    ! overlap: {w}")
+            print(f"    {indent}! overlap: {w}")
 
 
 if __name__ == "__main__":
