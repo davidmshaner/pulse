@@ -27,3 +27,4 @@ docs/plans/2026-06-13-package-refactor.md
 docs/specs/2026-06-12-pulse-relaunch-design.md
 docs/specs/2026-06-13-package-refactor-design.md
 docs/superpowers/
+*.bak-*
