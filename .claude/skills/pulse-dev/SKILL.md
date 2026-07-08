@@ -39,6 +39,7 @@ coordinating with a parallel agent, and setting up the board are **modes of one 
 | `/pulse-dev --issue` · "file a Pulse issue" | **issue** | raw ask → contextualized issue in Backlog | `modes/issue.md` |
 | `/pulse-dev --qa` · "QA Pulse" · "run the app" | **qa** | run the real app, read the menu-bar card | `modes/qa.md` |
 | `/pulse-dev --tail` · "tail the other agent" | **tail** | read a parallel worktree agent to coordinate | `modes/tail.md` |
+| `/pulse-dev --prep` · "stage the wave" · "prep the board" | **prep** | grade + stage + sequence the backlog so Up Next is fire-ready for a multi-agent run | `modes/prep.md` |
 | `/pulse-dev --bootstrap` | **bootstrap** | provision the board + labels + auto-add + advancement automations | `modes/bootstrap.md` |
 
 ## Trigger / End State
