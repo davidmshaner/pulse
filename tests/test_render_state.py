@@ -140,3 +140,32 @@ def test_repo_path_passthrough():
 def test_overhead_and_uncategorized_detail_defaults():
     assert build_view_model({})["overhead_sessions"] == 0
     assert build_view_model({})["uncategorized_detail"] == {"sessions": [], "meetings": []}
+
+
+# --- update banner (issue #25) --------------------------------------------
+
+def test_update_absent_when_no_update_check_key():
+    # Old state.json (pre-#25) has no update_check block — must render fine, no banner.
+    assert build_view_model(STATE)["update"] is None
+    assert build_view_model({})["update"] is None
+
+
+def test_update_absent_when_current():
+    s = dict(STATE)
+    s["update_check"] = {"behind": False, "local_head": "a" * 40, "remote_head": "a" * 40}
+    assert build_view_model(s)["update"] is None
+
+
+def test_update_banner_when_behind_carries_command_with_repo_path():
+    s = dict(STATE)
+    s["update_check"] = {"behind": True, "local_head": "a" * 40, "remote_head": "b" * 40}
+    up = build_view_model(s)["update"]
+    assert up is not None
+    # the exact one-line update command, scoped to the user's clone
+    assert up["command"] == "cd /Users/x/dev/pulse && git pull && bash install-mac.sh"
+
+
+def test_update_command_without_repo_path():
+    s = {"update_check": {"behind": True}}
+    up = build_view_model(s)["update"]
+    assert up["command"] == "git pull && bash install-mac.sh"
