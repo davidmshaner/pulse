@@ -36,6 +36,7 @@ from classify import (  # noqa: F401,E402
     classify_session_by_files,
     encoded_matches,
     classify_session_by_project_dir,
+    classify_session_by_launch_dir_exact,
     sc_root_to_internal,
     classify_meeting,
 )
@@ -55,6 +56,11 @@ def main():
         registry = yaml.safe_load(f)
     with open(args.learnings) as f:
         learnings = yaml.safe_load(f) or {}
+    rules = {}
+    if args.rules:
+        with open(args.rules) as f:
+            rules = yaml.safe_load(f) or {}
+    launch_dir_exact = rules.get("session_launch_dir_exact") or {}
     flat_buckets_sorted = sorted(walk_registry(registry["buckets"]), key=lambda b: -b["depth"])
     excluded_paths = registry.get("exclude_paths") or []
 
@@ -84,6 +90,13 @@ def main():
             sess_confident.append(s)
             continue
         if reason == "excluded":
+            continue
+        b = classify_session_by_launch_dir_exact(s, launch_dir_exact)
+        if b:
+            s["bucket_path"] = sc_root_to_internal(b)
+            s["reason"] = "launch_dir_exact"
+            s["evidence_scores"] = {}
+            sess_confident.append(s)
             continue
         # Let the LLM handle content-keyword matching (free text)
         s["bucket_path"] = None

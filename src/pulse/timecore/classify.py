@@ -85,6 +85,33 @@ def classify_session_by_project_dir(sess, flat_buckets_sorted, excluded_paths):
     return None, "unknown"
 
 
+def classify_session_by_launch_dir_exact(sess, launch_dir_exact):
+    """EXACT launch-dir -> bucket fallback for sessions with no file evidence and
+    no registry-prefix match.
+
+    Unlike the registry (which prefix-matches via encoded_matches), this matches
+    the launch dir EXACTLY. That lets an umbrella root -- a path that is the
+    parent of many buckets, e.g. a monorepo root -- be mapped to a bucket WITHOUT
+    its subdirectories inheriting the mapping (a prefix rule would wrongly grab
+    every no-file-evidence session launched anywhere under that root). Intended
+    for bare-root sessions whose only edits are their own auto-memory.
+
+    `launch_dir_exact` maps an absolute path -> bucket path (list of segments,
+    or a single string for a one-segment path). Both sides are normalized to the
+    encoded form ('/', '_', '.' -> '-'); the session side too, because older
+    ~/.claude/projects dirs preserve '_' while newer ones encode it."""
+    if not launch_dir_exact:
+        return None
+    enc = lambda p: (
+        p.replace("/", "-").replace("_", "-").replace(".", "-").lstrip("-")
+    )
+    e = enc(sess.get("encoded", ""))
+    for path, bucket in launch_dir_exact.items():
+        if e == enc(path.rstrip("/")):
+            return [bucket] if isinstance(bucket, str) else list(bucket)
+    return None
+
+
 # Optional root-bucket re-routing: map a top-level bucket a session lands on
 # exactly to a sub-bucket. Empty by default (generic); a consumer may populate it.
 ROOT_REDIRECT: dict = {}
