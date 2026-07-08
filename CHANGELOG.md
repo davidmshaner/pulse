@@ -6,6 +6,7 @@ All notable changes to Pulse are documented here. Format follows
 
 ## [Unreleased]
 ### Fixed
+- Nested group cards indent as a whole — border, title, bar, and sub-line shift together by depth — so hierarchy reads as containment instead of a floating title (#50).
 - Update banner no longer shows a false "update available" on an up-to-date clone: if local HEAD changed since the last check and mismatches the 6h-cached remote sha (the user pulled past a stale cache), the check refreshes the remote before deciding instead of trusting the cache — a genuinely-behind clone still never refetches per-snapshot (#49).
 
 ## [0.2.0] - 2026-07-08
