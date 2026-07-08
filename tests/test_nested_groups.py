@@ -160,6 +160,14 @@ def test_validate_unknown_member_flagged():
     assert len(errs) == 1 and "Ghost" in errs[0] and "G" in errs[0]
 
 
+def test_validate_group_engagement_name_collision_flagged():
+    # A name defined as BOTH an engagement and a group would make member
+    # references ambiguous (resolution picks the group) — reject loudly.
+    errs = appetite_errors({"ClientA": {"weekly_hours": 8}, "Both": {"weekly_hours": 2}},
+                           groups={"Both": ["ClientA"], "G": ["Both"]})
+    assert any("BOTH an engagement and a group" in e and "'Both'" in e for e in errs)
+
+
 def test_validate_group_member_is_allowed():
     # a member naming another group is valid, not "unknown"
     errs = appetite_errors({"ClientA": {"weekly_hours": 8}},

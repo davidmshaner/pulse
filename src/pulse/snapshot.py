@@ -558,6 +558,11 @@ def appetite_errors(appetite: dict[str, dict], groups=None,
                 f"ceiling needs a bill_rate ($/hr) to meter against."
             )
     if groups is not None:
+        for c in sorted(set(groups) & set(appetite.keys())):
+            errs.append(
+                f"'{c}' is defined as BOTH an engagement and a group — a member "
+                f"reference to it would be ambiguous; rename one of them."
+            )
         errs += _group_member_errors(groups, appetite.keys())
         cycles = _group_cycle_errors(groups)
         errs += cycles
@@ -785,6 +790,10 @@ def _group_double_count_errors(groups_by_name, engagement_names) -> list[str]:
         seen = seen | {name}
         members = groups_by_name.get(name)
         if _is_wildcard(members):
+            # A wildcard subgroup can't be expanded to a member multiset, so a
+            # "diamond" through it (e.g. [AllOfThem("*"), Billable]) is not
+            # flagged here — resolve_group_engagements' unconditional dedupe
+            # keeps the numbers correct regardless.
             return []
         out: list[str] = []
         for m in (members or []):
