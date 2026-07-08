@@ -188,7 +188,11 @@ def run_check(repo_dir: Path, now: datetime, prior: dict | None = None,
         instant the user pulls — even inside the throttle window.
       * a real GitHub request happens only if the last one was >= throttle_seconds ago;
         otherwise the cached remote sha is reused (checked_at stays anchored to that
-        last real fetch).
+        last real fetch). EXCEPTION (#49): if local HEAD CHANGED since the prior
+        check and mismatches the cached remote, the cache may simply be stale (the
+        user pulled past it) — force one real fetch rather than show a false
+        banner for up to the whole throttle window. A genuinely-behind clone has
+        an UNCHANGED local, so it never refetches per-snapshot.
       * if the network fails, the cached remote is carried forward (keep nagging
         correctly) and checked_at is NOT advanced, so we retry on the next snapshot.
       * behind is always recomputed as local != remote, both present, AND HEAD on the
@@ -200,10 +204,20 @@ def run_check(repo_dir: Path, now: datetime, prior: dict | None = None,
     try:
         local = read_local_head(repo_dir)
 
+        on_main = read_head_branch(repo_dir) == "main"
+
         elapsed = _elapsed(prior, now)
         throttled = elapsed is not None and elapsed < throttle_seconds and bool(
             prior and prior.get("remote_head"))
+        # Local moved past the cache — refresh before deciding (#49). on_main-gated:
+        # off-main the banner is forced silent anyway, so a fetch would be wasted.
+        forced = (throttled and on_main and local
+                  and local != prior.get("local_head")
+                  and local != prior.get("remote_head"))
+        if forced:
+            throttled = False
 
+        cache_suspect = False
         if throttled:
             remote = prior["remote_head"]
             checked_at = prior["checked_at"]
@@ -215,12 +229,16 @@ def run_check(repo_dir: Path, now: datetime, prior: dict | None = None,
                 # Fetch failed — reuse last-known remote, don't advance the window.
                 remote = (prior or {}).get("remote_head")
                 checked_at = (prior or {}).get("checked_at") or now.isoformat()
+                cache_suspect = forced
 
-        on_main = read_head_branch(repo_dir) == "main"
-        behind = bool(on_main and local and remote and local != remote)
+        behind = bool(on_main and local and remote and local != remote
+                      and not cache_suspect)
         return {
             "checked_at": checked_at,
-            "local_head": local,
+            # On a failed FORCED fetch the cache is known-suspect: stay silent
+            # (never a false banner) and keep the prior local_head so the bypass
+            # re-fires next snapshot — retry until a real fetch settles it.
+            "local_head": prior.get("local_head") if cache_suspect else local,
             "remote_head": remote,
             "behind": behind,
         }
