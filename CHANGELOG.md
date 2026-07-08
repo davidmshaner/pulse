@@ -5,6 +5,8 @@ All notable changes to Pulse are documented here. Format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Fixed
+- Update banner no longer shows a false "update available" on an up-to-date clone: if local HEAD changed since the last check and mismatches the 6h-cached remote sha (the user pulled past a stale cache), the check refreshes the remote before deciding instead of trusting the cache — a genuinely-behind clone still never refetches per-snapshot (#49).
 
 ## [0.2.0] - 2026-07-08
 ### Added

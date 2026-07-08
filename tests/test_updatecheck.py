@@ -245,3 +245,58 @@ def test_run_check_never_raises(monkeypatch, tmp_path):
     monkeypatch.setattr(updatecheck, "read_local_head", _boom)
     block = updatecheck.run_check(tmp_path, NOW, prior=None, opener=_opener_ok(SHA_B))
     assert block is None or block["behind"] is False
+
+
+# --- stale-cache false positive (#49) ----------------------------------------
+
+SHA_C = "3333333333333333333333333333333333333333"
+
+
+def test_pull_past_stale_cached_remote_forces_fresh_fetch(monkeypatch, tmp_path):
+    # The user pulled PAST the cached remote sha (remote advanced since the last
+    # real fetch). Plain inequality against the stale cache showed a false
+    # banner that survived its own update command (#49). Local changed since
+    # the prior check + mismatches the cache -> force a real fetch.
+    _patch_local(monkeypatch, SHA_C)                     # local moved to newest main
+    prior = {"checked_at": (NOW - timedelta(minutes=30)).isoformat(),
+             "local_head": SHA_A, "remote_head": SHA_B, "behind": True}
+    calls = []
+    def _open(url, timeout=None):
+        calls.append(url)
+        return _Resp(json.dumps({"sha": SHA_C}).encode())  # real remote == local now
+    block = updatecheck.run_check(tmp_path, NOW, prior=prior, opener=_open,
+                                  throttle_seconds=6 * 3600)
+    assert calls, "must bypass the throttle when local changed past the cached remote"
+    assert block["behind"] is False
+    assert block["remote_head"] == SHA_C
+    assert block["checked_at"] == NOW.isoformat()        # window re-anchored to the real fetch
+
+
+def test_unchanged_local_still_behind_keeps_cache_no_refetch(monkeypatch, tmp_path):
+    # A genuinely-behind clone (local UNCHANGED since prior check) must keep the
+    # cached compare — no network every 10-min snapshot (anon rate limit).
+    _patch_local(monkeypatch, SHA_A)
+    prior = {"checked_at": (NOW - timedelta(minutes=30)).isoformat(),
+             "local_head": SHA_A, "remote_head": SHA_B, "behind": True}
+    calls = []
+    def _open(url, timeout=None):
+        calls.append(url)
+        return _Resp(json.dumps({"sha": SHA_B}).encode())
+    block = updatecheck.run_check(tmp_path, NOW, prior=prior, opener=_open,
+                                  throttle_seconds=6 * 3600)
+    assert calls == []
+    assert block["behind"] is True
+
+
+def test_forced_refetch_failure_stays_fail_silent(monkeypatch, tmp_path):
+    # The forced refresh must keep the fail-silent contract: if the fetch dies,
+    # carry the cached remote forward (banner state unchanged), don't raise.
+    _patch_local(monkeypatch, SHA_C)
+    prior = {"checked_at": (NOW - timedelta(minutes=30)).isoformat(),
+             "local_head": SHA_A, "remote_head": SHA_B, "behind": True}
+    def _open(url, timeout=None):
+        raise URLError("offline")
+    block = updatecheck.run_check(tmp_path, NOW, prior=prior, opener=_open,
+                                  throttle_seconds=6 * 3600)
+    assert block["remote_head"] == SHA_B                 # carried forward
+    assert block["checked_at"] == prior["checked_at"]    # window not advanced
