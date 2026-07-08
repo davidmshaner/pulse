@@ -59,6 +59,16 @@
   .rgroup{margin-top:13px;}
   .rh{font-size:11px;font-weight:600;color:var(--ink);letter-spacing:0.3px;}
   .ritems{font-size:10px;color:var(--muted);margin-top:3px;line-height:1.55;}
+  /* update-available banner (#25) — sage-accented, shown only when behind main */
+  .update{background:var(--panel);border:1px solid var(--sage);border-left-width:3px;
+    border-radius:6px;padding:9px 11px;margin-bottom:12px;}
+  .update .uh{font-size:11px;font-weight:600;color:var(--sage);letter-spacing:0.3px;}
+  .update .ucmd{font-size:10px;color:var(--ink);margin-top:5px;background:var(--cream);
+    border:1px solid var(--line);border-radius:4px;padding:6px 8px;user-select:all;
+    word-break:break-word;line-height:1.45;}
+  .update .ucopy{display:inline-block;margin-top:7px;font-size:10px;color:var(--sage);
+    cursor:pointer;border:1px solid var(--sage);border-radius:4px;padding:2px 9px;letter-spacing:0.3px;}
+  .update .ucopy:hover{background:var(--sage);color:var(--cream);}
 </style>
 </head>
 <body>
@@ -124,8 +134,28 @@ function rowHTML(e){
     + mtg + '</div></div>';
 }
 
+function updateBannerHTML(){
+  // Shown only when the clone is behind shanerconsulting/pulse main (VM.update set by
+  // render_state from state.json's update_check block). Silent otherwise — no nagging.
+  if(!VM || !VM.update) return '';
+  return '<div class="update"><div class="uh">↑ Update available</div>'
+    + '<div class="ucmd">'+VM.update.command+'</div>'
+    + '<div class="ucopy" onclick="copyUpdate()">copy</div></div>';
+}
+
+function copyUpdate(){
+  var cmd = (VM && VM.update) ? VM.update.command : '';
+  var el = document.querySelector('.ucopy');
+  var done = function(m){ if(el){ el.textContent=m;
+    setTimeout(function(){ if(el) el.textContent='copy'; }, 1600); } };
+  try{
+    navigator.clipboard.writeText(cmd)
+      .then(function(){ done('copied ✓'); }, function(){ done('select text above'); });
+  }catch(e){ done('select text above'); }
+}
+
 function renderTime(){
-  var html = '<div class="head"><span class="pick">'
+  var html = updateBannerHTML() + '<div class="head"><span class="pick">'
     + seg('day') + '<span class="pdiv">/</span>' + seg('week')
     + '<span class="pdiv">/</span>' + seg('month')
     + '</span><span class="toggle" onclick="setView(\'people\')">people ›</span></div>';

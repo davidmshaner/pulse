@@ -23,6 +23,7 @@ sys.path.insert(0, str(PKG_DIR))
 import config  # noqa: E402
 import scan_codex  # noqa: E402
 import scan_cowork  # noqa: E402
+import updatecheck  # noqa: E402
 
 SCRIPTS = config.PKG_DIR                   # vendored scan_sessions/prematch/fetch_meetings live here
 APPETITE = config.DATA_DIR / "appetite.yaml"
@@ -400,6 +401,16 @@ def uncategorized_detail(sessions: list[dict], meetings: list[dict]) -> dict:
     }
 
 
+def _read_prior_update_check() -> dict | None:
+    """The last update_check block from state.json, so run_check can throttle its GitHub
+    request and carry the last-known remote sha forward when offline. Best-effort."""
+    try:
+        with open(STATE) as f:
+            return (json.load(f) or {}).get("update_check")
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
 def find_hours(rolled: dict[str, float], leaf_name: str) -> float:
     """Match by last path segment so a leaf name finds its full dotted path (e.g. 'Alpha' -> 'Acme.Alpha')."""
     for path_str, mins in rolled.items():
@@ -660,6 +671,18 @@ def main() -> None:
     # Dump the unresolved work for setup/RESOLVE.md (run in Claude Code) to act on.
     write_uncategorized(resolvable_sessions, unresolved_meetings, generated_at)
 
+    # "Update available" check (#25): compare local HEAD to shanerconsulting/pulse main.
+    # Runs here so it rides the snapshot interval (throttled, off the main thread in this
+    # pipeline subprocess) and lands in state.json as one atomic write. Fully fail-silent
+    # — a network/parse failure carries the prior block forward and never aborts the
+    # snapshot (a stale card is better than no card). Only git shas cross the wire (#8).
+    prior_uc = _read_prior_update_check()
+    try:
+        update_check = updatecheck.run_check(
+            config.DATA_DIR, datetime.now(LOCAL_TZ), prior=prior_uc) or prior_uc
+    except Exception:
+        update_check = prior_uc
+
     state = {
         "generated_at":         generated_at,
         "repo_path":            str(config.DATA_DIR),
@@ -681,6 +704,7 @@ def main() -> None:
         "meetings_wtd": meetings_in_window(meetings, *wins["wtd"]),
         "people": build_people(learnings),
         "last_deploy_week_run": last_dw,
+        "update_check": update_check,
     }
 
     # Atomic write

@@ -45,6 +45,21 @@ def _row(name: str, blk: dict, is_group: bool) -> dict:
     }
 
 
+def _update(state: dict) -> dict | None:
+    """Surface the 'you're behind shanerconsulting/pulse main' banner data, or None.
+
+    Reads the `update_check` block snapshot.py writes (see updatecheck.py). Absent or
+    `behind: False` => None => the card stays silent (no nagging when current, and old
+    state.json without the block renders fine). When behind, hands the template the exact
+    one-line update command, scoped to the user's own clone path."""
+    uc = state.get("update_check") or {}
+    if not uc.get("behind"):
+        return None
+    repo = state.get("repo_path") or ""
+    cmd = "git pull && bash install-mac.sh"
+    return {"command": f"cd {repo} && {cmd}" if repo else cmd}
+
+
 def build_view_model(state: dict) -> dict:
     engagements = [_row(n, e, False) for n, e in state.get("engagements", {}).items()]
     # capped-over first, then other capped (alpha), then track-only (alpha)
@@ -72,4 +87,5 @@ def build_view_model(state: dict) -> dict:
         "uncategorized_detail": state.get("uncategorized_detail", {"sessions": [], "meetings": []}),
         "meetings_wtd": state.get("meetings_wtd", 0),
         "people": state.get("people", []),
+        "update": _update(state),
     }
