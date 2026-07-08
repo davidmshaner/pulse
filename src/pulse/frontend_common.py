@@ -63,6 +63,18 @@ def fmt_period(d: dict) -> str:
     return f"{d['hours_left']}h left"
 
 
+def fmt_dollars(v: float) -> str:
+    """Whole dollars with a thousands separator: 6250 -> '$6,250'."""
+    return f"${v:,.0f}"
+
+
+def fmt_dollars_period(d: dict) -> str:
+    """The $ analog of fmt_period: '$1,750 left' under a cap, or 'OVER $1,000'."""
+    if d.get("over"):
+        return f"OVER {fmt_dollars(d['dollars_over'])}"
+    return f"{fmt_dollars(d['dollars_left'])} left"
+
+
 def _abbr(name: str) -> str:
     """Two-char abbreviation, derived generically (no hardcoded names)."""
     return name[:2]
@@ -123,6 +135,24 @@ def menu_lines(state: dict | None) -> list:
         items.append(None)
     for name, eng in state.get("engagements", {}).items():
         wtd, d7, d30 = eng["wtd"], eng["7d"], eng["30d"]
+        if eng.get("income_mode"):
+            # $ meter for the calendar month (#38). With a cap: bar toward the ceiling
+            # + $-left/over. Without: a running total, no bar. Hours stay on the sub-line.
+            mtd = eng["mtd"]
+            rate = eng.get("bill_rate")
+            cap = eng.get("monthly_cap_value")
+            if cap:
+                dot = "● " if mtd.get("over") else "  "
+                items.append(f"{dot}{name}  cap {fmt_dollars(cap)}/mo  ({fmt_dollars(rate)}/hr)")
+                items.append(f"  {bar(mtd['billed'], cap)}  "
+                             f"mtd {fmt_dollars(mtd['billed'])}/{fmt_dollars(cap)}   {fmt_dollars_period(mtd)}")
+            else:
+                items.append(f"  {name}  ({fmt_dollars(rate)}/hr · running meter)")
+                items.append(f"  {fmt_dollars(mtd['billed'])} billed this month")
+            items.append(f"  today {eng['today_h']:.1f}h  ·  7d {d7['actual_h']:.1f}h  ·  "
+                         f"mtd {mtd['actual_h']:.1f}h")
+            items.append(None)
+            continue
         if eng.get("track_only"):
             items.append(f"  {name}  (tracked, no cap)")
             items.append(f"  today {eng['today_h']:.1f}h  ·  7d {d7['actual_h']:.1f}h  ·  "

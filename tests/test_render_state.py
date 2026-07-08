@@ -169,3 +169,81 @@ def test_update_command_without_repo_path():
     s = {"update_check": {"behind": True}}
     up = build_view_model(s)["update"]
     assert up["command"] == "git pull && bash install-mac.sh"
+
+
+# --- income-meter mode (issue #38) ----------------------------------------
+# `bill_rate` engagements meter $ billed for the calendar month (MTD hours ×
+# rate). The month block goes dollars; the week/day blocks stay track-style
+# hours (no weekly $ cap in v1).
+
+INCOME_STATE = {
+    "generated_at": "2026-07-08T11:25:00-04:00",
+    "engagements": {
+        "MeterCap": {"income_mode": True, "bill_rate": 200, "monthly_cap_value": 10000,
+                     "track_only": False, "weekly_cap_h": None, "monthly_cap_h": None,
+                     "today_h": 1.5, "meeting_h": 0.0,
+                     "wtd": {"actual_h": 8.0}, "7d": {"actual_h": 9.0},
+                     "30d": {"actual_h": 40.0},
+                     "mtd": {"actual_h": 31.25, "billed": 6250, "dollars_left": 3750, "over": False}},
+        "MeterOnly": {"income_mode": True, "bill_rate": 200, "monthly_cap_value": None,
+                      "track_only": False, "weekly_cap_h": None, "monthly_cap_h": None,
+                      "today_h": 0.5, "meeting_h": 0.0,
+                      "wtd": {"actual_h": 3.0}, "7d": {"actual_h": 4.0},
+                      "30d": {"actual_h": 20.0},
+                      "mtd": {"actual_h": 15.0, "billed": 3000}},
+    },
+}
+
+
+def test_income_row_month_block_is_dollars_with_cap():
+    vm = build_view_model(INCOME_STATE)
+    row = [e for e in vm["engagements"] if e["name"] == "MeterCap"][0]
+    assert row["income_mode"] is True
+    assert row["bill_rate"] == 200
+    m = row["month"]
+    assert m["income"] is True
+    assert m["billed"] == 6250 and m["cap_value"] == 10000
+    assert m["pct"] == 62 and m["status"] == "under"       # 6250/10000, round-half-even
+    assert m["over"] is False and m["dollars_left"] == 3750
+
+
+def test_income_row_pure_meter_has_no_cap():
+    vm = build_view_model(INCOME_STATE)
+    row = [e for e in vm["engagements"] if e["name"] == "MeterOnly"][0]
+    m = row["month"]
+    assert m["income"] is True and m["billed"] == 3000
+    assert m["cap_value"] is None and m["status"] == "track" and m["pct"] == 0
+    assert "dollars_left" not in m and "dollars_over" not in m
+
+
+def test_income_row_week_and_day_are_trackstyle_hours():
+    vm = build_view_model(INCOME_STATE)
+    row = [e for e in vm["engagements"] if e["name"] == "MeterCap"][0]
+    # No weekly/day $ cap in v1 — those windows stay cap-less hour cells.
+    assert row["week"]["cap_h"] is None and row["week"]["actual_h"] == 8.0
+    assert row["day"]["cap_h"] is None and row["day"]["actual_h"] == 1.5
+    assert row["today_h"] == 1.5 and row["d7_h"] == 9.0
+
+
+def test_income_row_over_cap_reports_dollars_over():
+    s = {"engagements": {"Hot": {"income_mode": True, "bill_rate": 200,
+                                 "monthly_cap_value": 7500, "track_only": False,
+                                 "today_h": 0.0, "wtd": {"actual_h": 0.0},
+                                 "7d": {"actual_h": 0.0}, "30d": {"actual_h": 0.0},
+                                 "mtd": {"actual_h": 45.0, "billed": 9000}}}}
+    row = build_view_model(s)["engagements"][0]
+    m = row["month"]
+    assert m["over"] is True and m["dollars_over"] == 1500 and m["status"] == "over"
+    assert "dollars_left" not in m
+
+
+def test_income_row_barely_over_cap_renders_red():
+    # 100-105% band: a $ cap is a hard ceiling, so the bar must agree with the
+    # "$X over" verdict — status flips to "over" on any strict overage.
+    s = {"engagements": {"Hot": {"income_mode": True, "bill_rate": 200,
+                                 "monthly_cap_value": 7500, "track_only": False,
+                                 "today_h": 0.0, "wtd": {"actual_h": 0.0},
+                                 "7d": {"actual_h": 0.0}, "30d": {"actual_h": 0.0},
+                                 "mtd": {"actual_h": 38.0, "billed": 7600}}}}
+    m = build_view_model(s)["engagements"][0]["month"]
+    assert m["over"] is True and m["status"] == "over" and m["dollars_over"] == 100
