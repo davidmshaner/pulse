@@ -23,6 +23,10 @@ Against the Pulse repo:
   design; name it.
 - **Gotchas:** scan `process/conventions.md` "Known issues" and cite any the work risks tripping
   (the rumps disabled-gray trap, the Python.app process-kill caveat, the borderless-overlay quirk).
+- **"Byte-identical / unchanged rendering" acceptance criteria:** frame them against the
+  RUNTIME-RENDERED DOM (headless render of `#app`), not the template source or embedded view-model
+  JSON — any real feature changes the template text, so "unchanged" is only meaningful at the
+  rendered-output layer. Say so explicitly or the agent hits a false failure.
 - **Privacy scrub (the repo is PUBLIC — issues are public pages):** genericize client data before
   drafting. No real client names, billing rates, monthly values, caps, or per-client hours in the
   issue body — use `ExampleClient` / round illustrative figures and phrases like "an hourly-billed
