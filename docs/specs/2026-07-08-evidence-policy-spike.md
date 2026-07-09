@@ -19,7 +19,7 @@ The real `timecore/classify` primitives are imported unchanged, so the
 sessions mismatched.** That validates the harness before any policy is varied.
 
 Corpus: 1787 parsed sessions; **307 interactive** (only interactive sessions get
-bucket-classified). Of those, **93 touch `~/.claude/skills`** and **59 touch
+bucket-classified). Of those, **18 touch `~/.claude/skills`** (25 distinct files, 51 read/edit events) and **59 touch
 `~/.claude/projects`** in their evidence. Movers below are keyed by session file
 (not the launch-dir "encoded" key, which many sessions share).
 
@@ -31,7 +31,7 @@ Policies compared (all vs baseline):
 | **P1** | Exclude only the session's own memory dir. |
 | **P2** | Exclude *all* of `~/.claude/projects` from evidence. |
 | **P3** | P2 + exclude `~/.claude/skills` entirely. |
-| **P4** | P2 + keep skill-read evidence but demote it: skill-only evidence can't outvote a launch-dir prefix match. |
+| **P4** | P2 + keep skill-read evidence but demote it: skill evidence is ignored **only when it is the sole bucket-matching signal** (a session with ANY non-skill file evidence keeps its skill evidence at full weight — see Finding 2; a broader "drop skill evidence whenever the winning bucket is skill-only" reading collapses P4 into P3refined). |
 | **P3refined** | P2 + reject only the *catch-all* global claims (a bucket whose `source_path` is exactly `~/.claude/skills` or `~/.claude/projects`); deeper/specific skill claims still count. (Added by the spike.) |
 
 ## Results
@@ -68,7 +68,7 @@ P4 demotes skill evidence *only when it is the sole bucket-matching signal*. Whe
 a session's skill-reads coexist with a little real venture evidence but outweigh
 it, P4 still lets the skills decide. Measured consequence: P4 fixes the 6 clean
 "skill-read is the entire signal" sessions but **misses the dominant real cases**
-— e.g. both venture-A `/bootup` sessions, where a user-level skill read outweighs
+— e.g. both venture-A a daily-ritual skill sessions, where a user-level skill read outweighs
 (but does not wholly replace) the session's real venture-A evidence. P3/P3refined
 strip the catch-all and let that real evidence surface, routing them correctly.
 
@@ -105,14 +105,14 @@ the session's first message + evidence.
 |---|---|---|---|---|---|---|
 | 1 | 33.0 | internal → **venture A** (launch-dir) | P4 & P3ref | one user-level skill read | venture A | ✅ correct |
 | 2 | 1.0 | internal → **venture A** (launch-dir) | P4 & P3ref | one deploy-week context read | venture A (launched there) | ✅ correct |
-| 3 | 41.9 | internal → **consulting parent** (launch-dir) | P4 & P3ref | one `/voice` skill read | $-billed client (under consulting) | ✅ correct tree |
+| 3 | 41.9 | internal → **consulting parent** (launch-dir) | P4 & P3ref | one a note-capture skill skill read | $-billed client (under consulting) | ✅ correct tree |
 | 4 | 190.5 | internal → **consulting parent** (launch-dir) | P4 & P3ref | one infra-script read | consulting infra | ✅ same tree |
-| 5 | 21.8 | internal → **consulting parent** (launch-dir) | P4 & P3ref | edits a skill file (`/voice`) | consulting infra | ✅ same tree |
+| 5 | 21.8 | internal → **consulting parent** (launch-dir) | P4 & P3ref | edits a skill file (a note-capture skill) | consulting infra | ✅ same tree |
 | 6 | 223.6 | internal → **consulting parent** (launch-dir) | P4 & P3ref | one deploy-week context read | app-dev talk | ✅ off internal (coarse) |
-| 7 | 29.6 | internal → **venture A** (file-ev) | P3ref only | `/bootup` skill + venture-A memory | venture A | ✅ correct — **P4 misses** |
-| 8 | 27.2 | internal → **venture A** (file-ev) | P3ref only | `/bootup` skill | venture A | ✅ correct — **P4 misses** |
+| 7 | 29.6 | internal → **venture A** (file-ev) | P3ref only | a daily-ritual skill skill + venture-A memory | venture A | ✅ correct — **P4 misses** |
+| 8 | 27.2 | internal → **venture A** (file-ev) | P3ref only | a daily-ritual skill skill | venture A | ✅ correct — **P4 misses** |
 | 9 | 15.8 | internal → **venture B** (file-ev) | P3ref only | one deploy-week context read | venture B (launched there) | ✅ correct — **P4 misses** |
-| 10 | 436.4 | internal → **venture B** (file-ev) | P3ref only | a quarterly-update skill (many reads) | **venture A** | ⚠️ wrong venture |
+| 10 | 436.4 | internal → **venture B** (file-ev) | P3ref only | a periodic-report skill (many reads) | **venture A** | ⚠️ wrong venture |
 
 Mover 10 (7.3h) is the one blemish: once skill evidence is stripped, its entire
 attribution flips to venture B on a **single 0.2-weight incidental file read**.
@@ -169,7 +169,7 @@ the primary lever.**
 Why P3refined over the literal-criteria P4: the numbers. P4 matches the issue's
 "weight so skills can't outvote launch-dir" wording, but on measurement it
 under-corrects — it only rescues pure skill-only sessions and leaves the dominant
-real cases (both `/bootup` sessions, a launched-in-venture-B session, and the
+real cases (both a daily-ritual skill sessions, a launched-in-venture-B session, and the
 7.3h session) still mislabeled on *internal*. P3refined corrects 3 more sessions
 to their right venture and makes **zero** previously-correct sessions wrong; its
 one debit is a session that is wrong under every policy anyway. Over raw P3 it is
