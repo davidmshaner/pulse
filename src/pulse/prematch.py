@@ -38,6 +38,7 @@ from classify import (  # noqa: F401,E402
     classify_session_by_project_dir,
     classify_session_by_launch_dir_exact,
     sc_root_to_internal,
+    classify_session,
     classify_meeting,
 )
 
@@ -75,34 +76,13 @@ def main():
     for s in sessions_data.get("sessions", []):
         if s.get("category") != "interactive":
             continue
-        b, scores = classify_session_by_files(s, flat_buckets_sorted, excluded_paths)
-        if b:
-            s["bucket_path"] = sc_root_to_internal(b)
-            s["reason"] = "file_evidence"
-            s["evidence_scores"] = scores
-            sess_confident.append(s)
-            continue
-        b, reason = classify_session_by_project_dir(s, flat_buckets_sorted, excluded_paths)
-        if b:
-            s["bucket_path"] = sc_root_to_internal(b)
-            s["reason"] = reason
-            s["evidence_scores"] = {}
-            sess_confident.append(s)
-            continue
+        b, reason, scores = classify_session(s, flat_buckets_sorted, excluded_paths, launch_dir_exact)
         if reason == "excluded":
             continue
-        b = classify_session_by_launch_dir_exact(s, launch_dir_exact)
-        if b:
-            s["bucket_path"] = sc_root_to_internal(b)
-            s["reason"] = "launch_dir_exact"
-            s["evidence_scores"] = {}
-            sess_confident.append(s)
-            continue
-        # Let the LLM handle content-keyword matching (free text)
-        s["bucket_path"] = None
-        s["reason"] = "needs_llm"
-        s["evidence_scores"] = {}
-        sess_needs_llm.append(s)
+        s["bucket_path"] = b
+        s["reason"] = reason
+        s["evidence_scores"] = scores
+        (sess_confident if b else sess_needs_llm).append(s)
 
     # --- MEETINGS
     meet_confident = []
