@@ -73,3 +73,42 @@ def test_save_load_roundtrip(tmp_path):
     G.save_golden(p, data)
     assert G.load_golden(p) == data
     assert G.load_golden(tmp_path / "absent.yaml") == {"entries": []}
+
+
+def _fake_prematch(tmp_path, sessions):
+    import json
+    p = tmp_path / "prematch.json"
+    p.write_text(json.dumps({"confident": {"sessions": sessions}}))
+    return p
+
+
+def _pm_sess(name="s1.jsonl", bucket=("beta",)):
+    return {"filepath": f"/logs/{name}", "bucket_path": list(bucket),
+            "encoded": "-w-beta", "edit_paths": {"/w/beta/x": 1},
+            "read_paths": {}, "text_blob": "SECRET", "first_msg": "SECRET",
+            "bash_commands": ["SECRET"]}
+
+
+def test_seed_appends_provisional_and_strips_text(tmp_path):
+    gp = tmp_path / "golden.yaml"
+    pm = _fake_prematch(tmp_path, [_pm_sess()])
+    assert G.seed(pm, gp) == 1
+    data = G.load_golden(gp)
+    e = data["entries"][0]
+    assert e["id"] == "s1.jsonl" and e["status"] == "provisional"
+    assert e["expected_bucket"] == ["beta"]
+    assert "SECRET" not in gp.read_text()
+
+
+def test_seed_idempotent_and_preserves_confirmed(tmp_path):
+    gp = tmp_path / "golden.yaml"
+    confirmed = _entry(sid="s1.jsonl", status="confirmed", expected=("alpha",))
+    G.save_golden(gp, {"entries": [confirmed]})
+    pm = _fake_prematch(tmp_path, [_pm_sess(name="s1.jsonl"), _pm_sess(name="s2.jsonl")])
+    assert G.seed(pm, gp) == 1          # only s2 is new
+    assert G.seed(pm, gp) == 0          # idempotent
+    data = G.load_golden(gp)
+    by_id = {e["id"]: e for e in data["entries"]}
+    assert by_id["s1.jsonl"]["status"] == "confirmed"          # untouched
+    assert by_id["s1.jsonl"]["expected_bucket"] == ["alpha"]   # untouched
+    assert by_id["s2.jsonl"]["status"] == "provisional"

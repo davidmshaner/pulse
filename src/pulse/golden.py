@@ -92,3 +92,64 @@ def compute_mismatches(golden, flat, excluded, lde, valid_buckets):
             out.append({"entry": e, "kind": e.get("status", "provisional"),
                         "got": got, "reason": reason, "scores": scores})
     return out
+
+
+# --- seed -------------------------------------------------------------------
+
+def seed(prematch_path, golden_path):
+    """Import current confident sessions as provisional entries. Append-only,
+    idempotent by id; existing entries (confirmed OR provisional) are never
+    modified. Returns the number of entries added."""
+    with open(prematch_path) as f:
+        pm = json.load(f)
+    golden = load_golden(golden_path)
+    have = {e["id"] for e in golden["entries"]}
+    added = 0
+    for s in pm.get("confident", {}).get("sessions", []):
+        sid = Path(s["filepath"]).name
+        if sid in have:
+            continue
+        golden["entries"].append({
+            "id": sid,
+            "status": "provisional",
+            "expected_bucket": list(s["bucket_path"]) if s.get("bucket_path") else None,
+            "evidence": {
+                "encoded": s.get("encoded", ""),
+                "edit_paths": s.get("edit_paths") or {},
+                "read_paths": s.get("read_paths") or {},
+            },
+        })
+        have.add(sid)
+        added += 1
+    save_golden(golden_path, golden)
+    return added
+
+
+# --- CLI --------------------------------------------------------------------
+
+def main(argv=None):
+    import config
+
+    ap = argparse.ArgumentParser(description="Classification golden corpus (#58)")
+    ap.add_argument("--golden", default=str(config.GOLDEN))
+    ap.add_argument("--registry", default=str(config.REGISTRY))
+    ap.add_argument("--rules", default=str(config.RULES))
+    ap.add_argument("--prematch", default=str(config.DATA_DIR / ".cache" / "prematch.json"))
+    ap.add_argument("cmd", choices=["seed", "review", "status"])
+    args = ap.parse_args(argv)
+
+    if args.cmd == "seed":
+        n = seed(args.prematch, args.golden)
+        total = len(load_golden(args.golden)["entries"])
+        print(f"seeded {n} new provisional entries ({total} total) -> {args.golden}")
+        return 0
+    flat, excluded, lde, valid = load_inputs(args.registry, args.rules)
+    golden = load_golden(args.golden)
+    mm = compute_mismatches(golden, flat, excluded, lde, valid)
+    if args.cmd == "status":
+        return status(golden, mm)
+    return review(golden, mm, args.golden)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
