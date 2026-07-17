@@ -125,6 +125,28 @@ def seed(prematch_path, golden_path):
     return added
 
 
+# --- format & gate ----------------------------------------------------------
+
+def format_failures(mismatches):
+    """Human-readable verdict table for the pytest gate."""
+    stale = [m for m in mismatches if m["kind"] == "stale"]
+    conf = [m for m in mismatches if m["kind"] == "confirmed"]
+    prov = [m for m in mismatches if m["kind"] == "provisional"]
+    lines = []
+    if stale:
+        lines.append(f"{len(stale)} stale label(s) — expected bucket no longer in registry:")
+        lines += [f"  {m['entry']['id']}: {m['entry']['expected_bucket']}" for m in stale]
+    if conf:
+        lines.append(f"{len(conf)} REGRESSION against hand-validated truth:")
+        lines += [f"  {m['entry']['id']}: {m['entry']['expected_bucket']} -> {m['got']} ({m['reason']})"
+                  for m in conf]
+    if prov:
+        lines.append(f"{len(prov)} unreviewed mover(s) — run `python3 src/pulse/golden.py review`:")
+        lines += [f"  {m['entry']['id']}: {m['entry']['expected_bucket']} -> {m['got']} ({m['reason']})"
+                  for m in prov]
+    return "\n".join(lines)
+
+
 # --- CLI --------------------------------------------------------------------
 
 def main(argv=None):

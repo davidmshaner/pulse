@@ -112,3 +112,18 @@ def test_seed_idempotent_and_preserves_confirmed(tmp_path):
     assert by_id["s1.jsonl"]["status"] == "confirmed"          # untouched
     assert by_id["s1.jsonl"]["expected_bucket"] == ["alpha"]   # untouched
     assert by_id["s2.jsonl"]["status"] == "provisional"
+
+
+def test_format_failures_groups_and_points_to_review(tmp_path):
+    flat, exc, lde, valid = _inputs(tmp_path)
+    g = {"entries": [
+        _entry(sid="c.jsonl", status="confirmed", expected=("beta",), edits={"/w/alpha/x": 1}),
+        _entry(sid="p.jsonl", status="provisional", expected=("beta",), edits={"/w/alpha/x": 1}),
+        _entry(sid="st.jsonl", expected=("gone",)),
+    ]}
+    msg = G.format_failures(G.compute_mismatches(g, flat, exc, lde, valid))
+    assert "REGRESSION against hand-validated truth" in msg
+    assert "c.jsonl: ['beta'] -> ['alpha'] (file_evidence)" in msg
+    assert "unreviewed mover" in msg and "p.jsonl" in msg
+    assert "python3 src/pulse/golden.py review" in msg
+    assert "stale label" in msg and "st.jsonl" in msg
