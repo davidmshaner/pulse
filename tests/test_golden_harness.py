@@ -54,11 +54,18 @@ def test_provisional_and_confirmed_mismatch_kinds(tmp_path):
     assert all(m["got"] == ["alpha"] for m in mm)
 
 
-def test_stale_label_detected_before_replay(tmp_path):
+def test_stale_label_detected(tmp_path):
     flat, exc, lde, valid = _inputs(tmp_path)
     g = {"entries": [_entry(expected=("gone",), edits={"/w/beta/x": 1})]}
     mm = G.compute_mismatches(g, flat, exc, lde, valid)
     assert [m["kind"] for m in mm] == ["stale"]
+
+
+def test_stale_mismatch_carries_replayed_bucket(tmp_path):
+    flat, exc, lde, valid = _inputs(tmp_path)
+    g = {"entries": [_entry(expected=("gone",), edits={"/w/beta/x": 1})]}
+    mm = G.compute_mismatches(g, flat, exc, lde, valid)
+    assert mm[0]["kind"] == "stale" and mm[0]["got"] == ["beta"]
 
 
 def test_none_expected_matches_needs_llm(tmp_path):

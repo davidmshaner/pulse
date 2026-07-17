@@ -83,8 +83,9 @@ def compute_mismatches(golden, flat, excluded, lde, valid_buckets):
         exp = e.get("expected_bucket")
         exp_t = tuple(exp) if exp else None
         if exp_t is not None and exp_t not in valid_buckets:
-            out.append({"entry": e, "kind": "stale", "got": None,
-                        "reason": None, "scores": {}})
+            got, reason, scores = replay_entry(e, flat, excluded, lde)
+            out.append({"entry": e, "kind": "stale", "got": got,
+                        "reason": reason, "scores": scores})
             continue
         got, reason, scores = replay_entry(e, flat, excluded, lde)
         got_t = tuple(got) if got else None
@@ -190,7 +191,7 @@ def review(golden, mismatches, golden_path):
                 print(f"\n--- {e['id']}  expected={e.get('expected_bucket')}  "
                       f"launch={((e.get('evidence') or {}).get('encoded', ''))}")
                 v = input("[c]onfirm / [s]kip > ").strip().lower()
-                if v == "c" and apply_verdict(e, e.get("expected_bucket"), "old"):
+                if v == "c" and apply_verdict(e, None, "old"):
                     changed += 1
         except (KeyboardInterrupt, EOFError):
             print()
