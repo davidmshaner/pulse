@@ -127,3 +127,29 @@ def test_format_failures_groups_and_points_to_review(tmp_path):
     assert "unreviewed mover" in msg and "p.jsonl" in msg
     assert "python3 src/pulse/golden.py review" in msg
     assert "stale label" in msg and "st.jsonl" in msg
+
+
+def test_apply_verdict_new_rebaselines_and_confirms():
+    e = _entry(status="provisional", expected=("beta",))
+    assert G.apply_verdict(e, ["alpha"], "new", today="2026-07-17")
+    assert e["expected_bucket"] == ["alpha"]
+    assert e["status"] == "confirmed" and e["labeled_at"] == "2026-07-17"
+
+
+def test_apply_verdict_old_pins_and_confirms():
+    e = _entry(status="provisional", expected=("beta",))
+    assert G.apply_verdict(e, ["alpha"], "old", today="2026-07-17")
+    assert e["expected_bucket"] == ["beta"]      # unchanged
+    assert e["status"] == "confirmed"
+
+
+def test_apply_verdict_new_accepts_none_bucket():
+    e = _entry(status="provisional", expected=("beta",))
+    assert G.apply_verdict(e, None, "new", today="2026-07-17")
+    assert e["expected_bucket"] is None
+
+
+def test_apply_verdict_skip_changes_nothing():
+    e = _entry(status="provisional", expected=("beta",))
+    assert not G.apply_verdict(e, ["alpha"], "skip")
+    assert e["status"] == "provisional" and "labeled_at" not in e

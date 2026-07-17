@@ -147,6 +147,88 @@ def format_failures(mismatches):
     return "\n".join(lines)
 
 
+# --- review / status --------------------------------------------------------
+
+def apply_verdict(entry, got_bucket, verdict, today=None):
+    """'new' = the change is right: re-baseline expected to got_bucket and
+    confirm. 'old' = the change is a regression: pin current expected and
+    confirm (the gate stays red until the heuristic is fixed). 'skip' = leave
+    untouched. Returns True if the entry changed."""
+    if verdict == "skip":
+        return False
+    if verdict == "new":
+        entry["expected_bucket"] = list(got_bucket) if got_bucket else None
+    entry["status"] = "confirmed"
+    entry["labeled_at"] = today or date.today().isoformat()
+    return True
+
+
+def _show(m):
+    e = m["entry"]
+    ev = e.get("evidence") or {}
+    print(f"\n--- {e['id']} [{m['kind']}]")
+    print(f"  launch dir : {ev.get('encoded', '')}")
+    print(f"  expected   : {e.get('expected_bucket')}")
+    print(f"  replayed   : {m['got']} ({m['reason']})")
+    if m["scores"]:
+        top = sorted(m["scores"].items(), key=lambda kv: -kv[1])[:5]
+        print(f"  scores     : {top}")
+    paths = list((ev.get("edit_paths") or {}).items()) + \
+            list((ev.get("read_paths") or {}).items())
+    for p, c in sorted(paths, key=lambda kv: -kv[1])[:8]:
+        print(f"    {c:>3}x {p}")
+
+
+def review(golden, mismatches, golden_path):
+    if not mismatches:
+        pending = [e for e in golden["entries"] if e.get("status") != "confirmed"]
+        print(f"no mismatches. {len(pending)} provisional entries — "
+              f"confirm anchors proactively? Walking them (Ctrl-C to stop; [c]onfirm / [s]kip)")
+        changed = 0
+        try:
+            for e in pending:
+                print(f"\n--- {e['id']}  expected={e.get('expected_bucket')}  "
+                      f"launch={((e.get('evidence') or {}).get('encoded', ''))}")
+                v = input("[c]onfirm / [s]kip > ").strip().lower()
+                if v == "c" and apply_verdict(e, e.get("expected_bucket"), "old"):
+                    changed += 1
+        except (KeyboardInterrupt, EOFError):
+            print()
+        if changed:
+            save_golden(golden_path, golden)
+        print(f"confirmed {changed}")
+        return 0
+    changed = 0
+    try:
+        for m in mismatches:
+            _show(m)
+            if m["kind"] == "stale":
+                v = input("[n]ew: re-baseline to replayed / [s]kip (or fix the label by hand) > ")
+                v = {"n": "new", "s": "skip"}.get(v.strip().lower(), "skip")
+            else:
+                v = input("[n]ew-right / [o]ld-right / [s]kip > ")
+                v = {"n": "new", "o": "old", "s": "skip"}.get(v.strip().lower(), "skip")
+            if apply_verdict(m["entry"], m["got"], v):
+                changed += 1
+    except (KeyboardInterrupt, EOFError):
+        print("\n(stopped; verdicts so far are saved)")
+    if changed:
+        save_golden(golden_path, golden)
+    print(f"\nrecorded {changed} verdict(s); re-run pytest to see the gate.")
+    return 0
+
+
+def status(golden, mismatches):
+    entries = golden.get("entries", [])
+    conf = sum(1 for e in entries if e.get("status") == "confirmed")
+    print(f"{len(entries)} entries: {conf} confirmed, {len(entries) - conf} provisional")
+    if mismatches:
+        print(format_failures(mismatches))
+    else:
+        print("0 mismatches — gate is green.")
+    return 0
+
+
 # --- CLI --------------------------------------------------------------------
 
 def main(argv=None):
