@@ -76,6 +76,7 @@ TIMECORE_DIR = _resolve(_cfg["timecore_dir"]) if _cfg.get("timecore_dir") else P
 REGISTRY = _resolve(_cfg["registry"]) if _cfg.get("registry") else DATA_DIR / "bucket-registry.yaml"
 LEARNINGS = _resolve(_cfg["learnings"]) if _cfg.get("learnings") else DATA_DIR / "learnings.yaml"
 RULES = _resolve(_cfg["rules"]) if _cfg.get("rules") else DATA_DIR / "disambiguation-rules.yaml"
+GOLDEN = _resolve(_cfg["golden"]) if _cfg.get("golden") else DATA_DIR / "golden-classifications.yaml"
 
 _cal = _cfg.get("calendar") or {}
 CALENDAR_SELF_EMAILS = list(_cal.get("self_emails", []))

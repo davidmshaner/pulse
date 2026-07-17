@@ -2,6 +2,7 @@ config.yaml
 bucket-registry.yaml
 learnings.yaml
 disambiguation-rules.yaml
+golden-classifications.yaml
 state.json
 state.json.tmp
 .cache/
