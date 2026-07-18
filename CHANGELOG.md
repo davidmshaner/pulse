@@ -5,6 +5,14 @@ All notable changes to Pulse are documented here. Format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Fixed
+- File-evidence poisoning by catch-all global dirs: a registry claim that is exactly
+  `~/.claude/skills` or `~/.claude/projects` no longer counts as file evidence
+  (every session touches those dirs as a side effect, so such claims silently pulled
+  other ventures' sessions into the claiming bucket). Deeper, specific claims still
+  count; `prematch` warns when the registry carries a catch-all claim (#55)
+
+### Added
 - Classification golden corpus: hand-validated regression gate for classifier
   heuristic changes — `golden-classifications.yaml` (gitignored) + pytest gate +
   `python3 src/pulse/golden.py seed|review|status` (#58)
