@@ -84,7 +84,7 @@ on any of:
 - **confirmed mismatch** — "regression against hand-validated truth", listing
   each mover as `id: old → new (reason)`.
 - **provisional mismatch** — "N unreviewed movers — run
-  `python3 -m pulse.golden review`", same table.
+  `python3 src/pulse/golden.py review`", same table.
 - **stale label** — `expected_bucket` no longer exists in the registry; distinct
   failure so a bucket rename can't masquerade as a pass or hide among movers.
 
@@ -95,7 +95,7 @@ reroutes a session through a different rule to the same bucket is not a mover).
 All-match → ordinary green test. The sweep is pure in-memory (no JSONL, no
 network, no LLM); well under a second for ~300 entries.
 
-### 4. CLI — `python3 -m pulse.golden`
+### 4. CLI — `python3 src/pulse/golden.py`
 
 - **`seed`** — import current confident sessions from `.cache/prematch.json` as
   `provisional`. Append-only and idempotent by id; never modifies `confirmed`
