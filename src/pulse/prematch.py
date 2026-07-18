@@ -49,7 +49,7 @@ def warn_catchall_claims(flat_buckets, out=sys.stderr):
     (the matcher refuses it) — warn so the registry entry itself gets fixed."""
     for path, src in catchall_claims(flat_buckets):
         print(f"WARNING: bucket {' > '.join(path)} claims catch-all global dir "
-              f"{src} — remove it from additional_paths; it cannot count as "
+              f"{src} — remove that claim from the registry; it cannot count as "
               f"evidence (#55)", file=out)
 
 

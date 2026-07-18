@@ -11,6 +11,8 @@ All notable changes to Pulse are documented here. Format follows
   (every session touches those dirs as a side effect, so such claims silently pulled
   other ventures' sessions into the claiming bucket). Deeper, specific claims still
   count; `prematch` warns when the registry carries a catch-all claim (#55)
+
+### Added
 - Classification golden corpus: hand-validated regression gate for classifier
   heuristic changes — `golden-classifications.yaml` (gitignored) + pytest gate +
   `python3 src/pulse/golden.py seed|review|status` (#58)
