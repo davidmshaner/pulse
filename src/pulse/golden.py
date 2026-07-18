@@ -92,6 +92,15 @@ def compute_mismatches(golden, flat, excluded, lde, valid_buckets):
             continue
         got, reason, scores = replay_entry(e, flat, excluded, lde)
         got_t = tuple(got) if got else None
+        if e.get("deterministic") is False:
+            # Hand-ruled ambiguous shape (#57): the cascade must DECLINE
+            # (needs_llm) — any confident assignment is the regression.
+            # expected_bucket stays as the human-truth record (and still
+            # gets the stale check above).
+            if got_t is not None:
+                out.append({"entry": e, "kind": e.get("status", "provisional"),
+                            "got": got, "reason": reason, "scores": scores})
+            continue
         if got_t != exp_t:
             out.append({"entry": e, "kind": e.get("status", "provisional"),
                         "got": got, "reason": reason, "scores": scores})

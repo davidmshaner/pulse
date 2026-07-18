@@ -5,6 +5,17 @@ All notable changes to Pulse are documented here. Format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Changed
+- Minimum-confidence floor for file evidence: a single incidental read (weight 0.2)
+  can no longer decide a session's bucket on its own. Sub-floor evidence is weighed
+  against the launch-dir bucket instead: agreeing whispers defer to the launch dir,
+  a whisper pointing inside a *child* of the launch bucket refines the session down
+  to it (`file_evidence_refined`), and a whisper on a *different branch* routes the
+  session to the LLM — hand-review of the golden corpus found confirmed sessions of
+  that exact shape with opposite truths, so no deterministic answer is defensible.
+  Any edit or two-plus reads decide as before. Corpus replay (289 sessions, 13
+  hand-confirmed): 7 refined, 2 to the LLM, everything else unchanged (#57)
+
 ### Fixed
 - File-evidence poisoning by catch-all global dirs: a registry claim that is exactly
   `~/.claude/skills` or `~/.claude/projects` no longer counts as file evidence
