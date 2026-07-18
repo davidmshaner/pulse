@@ -23,6 +23,10 @@ Against the Pulse repo:
   design; name it.
 - **Gotchas:** scan `process/conventions.md` "Known issues" and cite any the work risks tripping
   (the rumps disabled-gray trap, the Python.app process-kill caveat, the borderless-overlay quirk).
+- **User-data paths:** never assume `bucket-registry.yaml`/`disambiguation-rules.yaml`/the golden
+  corpus sit at the repo root — `config.yaml` may point them elsewhere (David's points at
+  `~/.claude/skills/deploy-week/context/`), and relative config paths resolve against `$HOME`
+  (`config._resolve`). Cite `config.REGISTRY/RULES/GOLDEN`, not literal root paths.
 - **"Byte-identical / unchanged rendering" acceptance criteria:** frame them against the
   RUNTIME-RENDERED DOM (headless render of `#app`), not the template source or embedded view-model
   JSON — any real feature changes the template text, so "unchanged" is only meaningful at the
