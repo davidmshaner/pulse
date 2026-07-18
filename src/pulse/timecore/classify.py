@@ -192,21 +192,29 @@ def classify_session(sess, flat_buckets_sorted, excluded_paths, launch_dir_exact
     ambiguous — the corpus holds confirmed sessions of that exact shape with
     opposite truths — so the cascade declines to needs_llm."""
     scores = _score_files(sess, flat_buckets_sorted, excluded_paths)
-    whisper = None
+    whispers = []
     if scores:
         top, max_s = _top_bucket(scores)
         if max_s > EVIDENCE_FLOOR:
             return sc_root_to_internal(top), "file_evidence", {str(k): v for k, v in scores.items()}
-        whisper = top
+        whispers = [list(k) for k in scores]
     b, reason = classify_session_by_project_dir(sess, flat_buckets_sorted, excluded_paths)
     if b:
-        if whisper:
-            refines = len(whisper) > len(b) and whisper[:len(b)] == b
-            agrees = len(whisper) <= len(b) and b[:len(whisper)] == whisper
-            if refines:
-                return sc_root_to_internal(whisper), "file_evidence_refined", {str(k): v for k, v in scores.items()}
-            if not agrees:
+        if whispers:
+            # Every whisper bucket is weighed, not just the strongest: one
+            # off-branch whisper is enough to make the session ambiguous,
+            # regardless of dict ordering.
+            def on_branch(w):
+                return (w[:len(b)] == b) if len(w) > len(b) else (b[:len(w)] == w)
+            if not all(on_branch(w) for w in whispers):
                 return None, "needs_llm", {}
+            desc = [w for w in whispers if len(w) > len(b)]
+            if desc:
+                deepest = max(desc, key=len)
+                if all(deepest[:len(w)] == w for w in desc):
+                    # a single chain below the launch bucket: refine to its tip
+                    return sc_root_to_internal(deepest), "file_evidence_refined", {str(k): v for k, v in scores.items()}
+                # sibling children: subtree agreed, child ambiguous — stay at b
         return sc_root_to_internal(b), reason, {}
     if reason == "excluded":
         return None, "excluded", {}

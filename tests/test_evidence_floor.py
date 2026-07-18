@@ -18,7 +18,8 @@ from classify import walk_registry, classify_session, classify_session_by_files
 REG = {
     "buckets": [
         {"name": "alpha", "source_path": "/w/alpha",
-         "children": [{"name": "deep", "source_path": "/w/alpha/deep"}]},
+         "children": [{"name": "deep", "source_path": "/w/alpha/deep"},
+                      {"name": "deep2", "source_path": "/w/alpha/deep2"}]},
         {"name": "beta", "source_path": "/w/beta"},
     ],
 }
@@ -106,3 +107,40 @@ def test_by_files_itself_enforces_the_floor():
     s = _sess(reads={"/w/alpha/x.py": 1})
     b, scores = classify_session_by_files(s, FLAT, EXCLUDED)
     assert (b, scores) == (None, None)
+
+
+def test_multibranch_whispers_decline_regardless_of_order():
+    # Two floor whispers, one on the launch branch and one off it: the off-
+    # branch whisper is a contradiction — needs_llm — and the result must not
+    # depend on read_paths insertion order.
+    for reads in ({"/w/alpha/x.py": 1, "/w/beta/y.py": 1},
+                  {"/w/beta/y.py": 1, "/w/alpha/x.py": 1}):
+        s = _sess(encoded="-w-alpha-sub", reads=reads)
+        b, reason, scores = classify_session(s, FLAT, EXCLUDED, LDE)
+        assert (b, reason) == (None, "needs_llm"), reads
+
+
+def test_contradicting_whisper_blocks_refinement():
+    # A descendant whisper cannot refine while another whisper contradicts
+    # the launch branch.
+    s = _sess(encoded="-w-alpha-sub",
+              reads={"/w/alpha/deep/x.py": 1, "/w/beta/y.py": 1})
+    b, reason, scores = classify_session(s, FLAT, EXCLUDED, LDE)
+    assert (b, reason) == (None, "needs_llm")
+
+
+def test_sibling_child_whispers_stay_at_launch_bucket():
+    # Whispers into two different children of the launch bucket agree on the
+    # subtree but not the child — refinement is ambiguous, stay at the parent.
+    s = _sess(encoded="-w-alpha-sub",
+              reads={"/w/alpha/deep/x.py": 1, "/w/alpha/deep2/y.py": 1})
+    b, reason, scores = classify_session(s, FLAT, EXCLUDED, LDE)
+    assert (b, reason) == (["alpha"], "project_dir_prefix")
+
+
+def test_chained_whispers_refine_to_deepest():
+    # Whispers at alpha and alpha/deep form one chain — refine to its tip.
+    s = _sess(encoded="-w-alpha-sub",
+              reads={"/w/alpha/x.py": 1, "/w/alpha/deep/y.py": 1})
+    b, reason, scores = classify_session(s, FLAT, EXCLUDED, LDE)
+    assert (b, reason) == (["alpha", "deep"], "file_evidence_refined")
