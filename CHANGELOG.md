@@ -5,6 +5,13 @@ All notable changes to Pulse are documented here. Format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Changed
+- Minimum-confidence floor for file evidence: a session whose winning bucket score
+  is a single incidental read (weight 0.2) is no longer bucket-assigned by it — it
+  falls through to the launch-dir cascade like a no-evidence session. Any edit or
+  two-plus reads still decide. Corpus replay: 9 sessions move (all single-read
+  whispers), 0 fall to the LLM (#57)
+
 ### Fixed
 - File-evidence poisoning by catch-all global dirs: a registry claim that is exactly
   `~/.claude/skills` or `~/.claude/projects` no longer counts as file evidence
