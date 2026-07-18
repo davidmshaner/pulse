@@ -126,6 +126,29 @@ def sc_root_to_internal(path):
     return path
 
 
+def classify_session(sess, flat_buckets_sorted, excluded_paths, launch_dir_exact):
+    """The full session cascade, in shipping order: file_evidence ->
+    project_dir_prefix -> launch_dir_exact -> needs_llm. Single source of
+    truth shared by prematch.py and the golden-corpus replay (#58): a session
+    is classified identically no matter which consumer asks.
+
+    Returns (bucket_path|None, reason, evidence_scores). bucket_path is
+    post-ROOT_REDIRECT. reason "excluded" means the launch dir is registry-
+    excluded (callers drop the session entirely)."""
+    b, scores = classify_session_by_files(sess, flat_buckets_sorted, excluded_paths)
+    if b:
+        return sc_root_to_internal(b), "file_evidence", scores
+    b, reason = classify_session_by_project_dir(sess, flat_buckets_sorted, excluded_paths)
+    if b:
+        return sc_root_to_internal(b), reason, {}
+    if reason == "excluded":
+        return None, "excluded", {}
+    b = classify_session_by_launch_dir_exact(sess, launch_dir_exact)
+    if b:
+        return sc_root_to_internal(b), "launch_dir_exact", {}
+    return None, "needs_llm", {}
+
+
 def classify_meeting(m, learnings):
     """Returns (bucket_path, reason) or (None, reason).
 

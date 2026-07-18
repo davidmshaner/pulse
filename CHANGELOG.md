@@ -5,6 +5,9 @@ All notable changes to Pulse are documented here. Format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- Classification golden corpus: hand-validated regression gate for classifier
+  heuristic changes — `golden-classifications.yaml` (gitignored) + pytest gate +
+  `python3 src/pulse/golden.py seed|review|status` (#58)
 
 ## [0.2.1] - 2026-07-08
 ### Fixed
