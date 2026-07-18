@@ -72,6 +72,13 @@ def _is_self_memory(filepath, encoded):
     return filepath.startswith(self_prefix)
 
 
+# Minimum-confidence floor (#57): a lone incidental read (weight 0.2) must not
+# decide a session's bucket — the winning score has to exceed it (any edit, or
+# two-plus reads). Sub-floor evidence is treated as no evidence so the session
+# falls through to the launch-dir cascade like any other.
+EVIDENCE_FLOOR = 0.2
+
+
 def classify_session_by_files(sess, flat_buckets_sorted, excluded_paths):
     encoded = sess.get("encoded", "")
     scores = defaultdict(float)
@@ -90,6 +97,8 @@ def classify_session_by_files(sess, flat_buckets_sorted, excluded_paths):
     if not scores:
         return None, None
     max_s = max(scores.values())
+    if max_s <= EVIDENCE_FLOOR:
+        return None, None
     top = sorted([b for b, s in scores.items() if s == max_s], key=lambda b: -len(b))
     return list(top[0]), {str(k): v for k, v in scores.items()}
 
