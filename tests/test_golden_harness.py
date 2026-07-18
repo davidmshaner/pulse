@@ -173,3 +173,28 @@ def test_apply_verdict_skip_changes_nothing():
     e = _entry(status="provisional", expected=("beta",))
     assert not G.apply_verdict(e, ["alpha"], "skip")
     assert e["status"] == "provisional" and "labeled_at" not in e
+
+
+def test_deterministic_false_passes_when_cascade_declines(tmp_path):
+    # Contradicting-whisper shape: launched in beta, one alpha read. The
+    # cascade declines (needs_llm) — with deterministic: false that IS the
+    # expected outcome; expected_bucket stays as the human-truth record.
+    flat, exc, lde, valid = _inputs(tmp_path)
+    e = _entry(sid="amb.jsonl", status="confirmed", expected=("alpha",),
+               encoded="-w-beta-sub", reads={"/w/alpha/x": 1})
+    e["deterministic"] = False
+    g = {"entries": [e]}
+    assert G.compute_mismatches(g, flat, exc, lde, valid) == []
+
+
+def test_deterministic_false_fails_when_cascade_assigns(tmp_path):
+    # If a later heuristic change makes the ambiguous shape confidently
+    # assign ANY bucket again, that is a regression against the ruling.
+    flat, exc, lde, valid = _inputs(tmp_path)
+    e = _entry(sid="amb.jsonl", status="confirmed", expected=("alpha",),
+               encoded="-w-beta-sub", edits={"/w/alpha/x": 1})
+    e["deterministic"] = False
+    g = {"entries": [e]}
+    mm = G.compute_mismatches(g, flat, exc, lde, valid)
+    assert len(mm) == 1 and mm[0]["kind"] == "confirmed"
+    assert mm[0]["got"] == ["alpha"]

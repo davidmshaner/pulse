@@ -1,5 +1,13 @@
 """Minimum-confidence floor (#57): a single incidental low-weight read must
-not decide a session's bucket — it falls through the cascade like no evidence.
+not decide a session's bucket on its own. Hand-verdicts on the golden corpus
+set the policy for sub-floor evidence ("a whisper"):
+
+- whisper agrees with the launch-dir bucket -> launch dir classifies (no change)
+- whisper REFINES the launch-dir bucket (points inside a child) -> refine down
+- whisper CONTRADICTS the launch-dir bucket (different branch) -> ambiguous,
+  decline to needs_llm (the corpus holds confirmed sessions with this exact
+  shape and OPPOSITE truths, so no deterministic answer is defensible)
+- substantive evidence (any edit, or two-plus reads) decides as before
 
 Synthetic registry only (public repo): no real client names or paths.
 """
@@ -23,12 +31,40 @@ def _sess(encoded="", edits=None, reads=None):
     return {"encoded": encoded, "edit_paths": edits or {}, "read_paths": reads or {}}
 
 
-def test_single_read_falls_through_to_launch_dir():
-    # The #55-spike mover-10 shape: a session launched in beta whose only
-    # evidence is one incidental read of an alpha file.
+def test_contradicting_whisper_declines_to_llm():
+    # Launch dir says beta; the only evidence is one read in alpha. The corpus
+    # proves this shape is ambiguous (both truths exist) — the deterministic
+    # cascade must decline rather than guess either way.
     s = _sess(encoded="-w-beta-sub", reads={"/w/alpha/x.py": 1})
     b, reason, scores = classify_session(s, FLAT, EXCLUDED, LDE)
-    assert (b, reason) == (["beta"], "project_dir_prefix")
+    assert (b, reason) == (None, "needs_llm")
+
+
+def test_whisper_refines_launch_bucket_downward():
+    # Launch dir says alpha; the one read points inside alpha's child. The
+    # signals agree up to the child — refine to it.
+    s = _sess(encoded="-w-alpha-sub", reads={"/w/alpha/deep/x.py": 1})
+    b, reason, scores = classify_session(s, FLAT, EXCLUDED, LDE)
+    assert b == ["alpha", "deep"]
+    assert reason == "file_evidence_refined"
+
+
+def test_whisper_agreeing_with_launch_dir_is_launch_dir():
+    s = _sess(encoded="-w-alpha-sub", reads={"/w/alpha/x.py": 1})
+    b, reason, scores = classify_session(s, FLAT, EXCLUDED, LDE)
+    assert (b, reason) == (["alpha"], "project_dir_prefix")
+
+
+def test_ancestor_whisper_defers_to_deeper_launch_bucket():
+    s = _sess(encoded="-w-alpha-deep-sub", reads={"/w/alpha/y.py": 1})
+    b, reason, scores = classify_session(s, FLAT, EXCLUDED, LDE)
+    assert (b, reason) == (["alpha", "deep"], "project_dir_prefix")
+
+
+def test_whisper_cannot_resurrect_excluded_launch_dir():
+    s = _sess(encoded="-w-scratch-x", reads={"/w/alpha/x.py": 1})
+    b, reason, scores = classify_session(s, FLAT, EXCLUDED, LDE)
+    assert (b, reason) == (None, "excluded")
 
 
 def test_single_read_with_no_launch_match_goes_to_needs_llm():
@@ -56,7 +92,8 @@ def test_single_edit_still_decides():
 
 
 def test_whisper_spread_across_buckets_falls_through():
-    # One read each in two buckets: every score is at the floor, none decisive.
+    # One read each in two buckets from a launch dir with no prefix match:
+    # every score is at the floor, none decisive — LDE fallback applies.
     s = _sess(encoded="-w-umbrella",
               reads={"/w/alpha/x.py": 1, "/w/beta/y.py": 1})
     b, reason, scores = classify_session(s, FLAT, EXCLUDED, LDE)

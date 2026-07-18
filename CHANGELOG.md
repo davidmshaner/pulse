@@ -6,11 +6,15 @@ All notable changes to Pulse are documented here. Format follows
 
 ## [Unreleased]
 ### Changed
-- Minimum-confidence floor for file evidence: a session whose winning bucket score
-  is a single incidental read (weight 0.2) is no longer bucket-assigned by it — it
-  falls through to the launch-dir cascade like a no-evidence session. Any edit or
-  two-plus reads still decide. Corpus replay: 9 sessions move — the confirmed
-  #57 regression case plus 8 single-read whispers — and 0 fall to the LLM (#57)
+- Minimum-confidence floor for file evidence: a single incidental read (weight 0.2)
+  can no longer decide a session's bucket on its own. Sub-floor evidence is weighed
+  against the launch-dir bucket instead: agreeing whispers defer to the launch dir,
+  a whisper pointing inside a *child* of the launch bucket refines the session down
+  to it (`file_evidence_refined`), and a whisper on a *different branch* routes the
+  session to the LLM — hand-review of the golden corpus found confirmed sessions of
+  that exact shape with opposite truths, so no deterministic answer is defensible.
+  Any edit or two-plus reads decide as before. Corpus replay (289 sessions, 13
+  hand-confirmed): 7 refined, 2 to the LLM, everything else unchanged (#57)
 
 ### Fixed
 - File-evidence poisoning by catch-all global dirs: a registry claim that is exactly

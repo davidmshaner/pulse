@@ -79,7 +79,8 @@ def _is_self_memory(filepath, encoded):
 EVIDENCE_FLOOR = 0.2
 
 
-def classify_session_by_files(sess, flat_buckets_sorted, excluded_paths):
+def _score_files(sess, flat_buckets_sorted, excluded_paths):
+    """Raw per-bucket evidence scores (edits 1.0, reads 0.2), no floor."""
     encoded = sess.get("encoded", "")
     scores = defaultdict(float)
     for fp, count in (sess.get("edit_paths") or {}).items():
@@ -94,13 +95,23 @@ def classify_session_by_files(sess, flat_buckets_sorted, excluded_paths):
         b = match_file_to_bucket(fp, flat_buckets_sorted, excluded_paths)
         if b:
             scores[b] += count * 0.2
+    return scores
+
+
+def _top_bucket(scores):
+    max_s = max(scores.values())
+    top = sorted([b for b, s in scores.items() if s == max_s], key=lambda b: -len(b))
+    return list(top[0]), max_s
+
+
+def classify_session_by_files(sess, flat_buckets_sorted, excluded_paths):
+    scores = _score_files(sess, flat_buckets_sorted, excluded_paths)
     if not scores:
         return None, None
-    max_s = max(scores.values())
+    top, max_s = _top_bucket(scores)
     if max_s <= EVIDENCE_FLOOR:
         return None, None
-    top = sorted([b for b, s in scores.items() if s == max_s], key=lambda b: -len(b))
-    return list(top[0]), {str(k): v for k, v in scores.items()}
+    return top, {str(k): v for k, v in scores.items()}
 
 
 def encoded_matches(encoded, source_path):
@@ -171,12 +182,31 @@ def classify_session(sess, flat_buckets_sorted, excluded_paths, launch_dir_exact
 
     Returns (bucket_path|None, reason, evidence_scores). bucket_path is
     post-ROOT_REDIRECT. reason "excluded" means the launch dir is registry-
-    excluded (callers drop the session entirely)."""
-    b, scores = classify_session_by_files(sess, flat_buckets_sorted, excluded_paths)
-    if b:
-        return sc_root_to_internal(b), "file_evidence", scores
+    excluded (callers drop the session entirely).
+
+    Sub-floor evidence ("a whisper", e.g. one incidental read) cannot decide a
+    session on its own, but it is weighed against the launch-dir bucket
+    (hand-verdict policy from the golden corpus, #57): a whisper that refines
+    the launch bucket into a descendant wins ("file_evidence_refined"); a
+    whisper on a different branch makes the session deterministically
+    ambiguous — the corpus holds confirmed sessions of that exact shape with
+    opposite truths — so the cascade declines to needs_llm."""
+    scores = _score_files(sess, flat_buckets_sorted, excluded_paths)
+    whisper = None
+    if scores:
+        top, max_s = _top_bucket(scores)
+        if max_s > EVIDENCE_FLOOR:
+            return sc_root_to_internal(top), "file_evidence", {str(k): v for k, v in scores.items()}
+        whisper = top
     b, reason = classify_session_by_project_dir(sess, flat_buckets_sorted, excluded_paths)
     if b:
+        if whisper:
+            refines = len(whisper) > len(b) and whisper[:len(b)] == b
+            agrees = len(whisper) <= len(b) and b[:len(whisper)] == whisper
+            if refines:
+                return sc_root_to_internal(whisper), "file_evidence_refined", {str(k): v for k, v in scores.items()}
+            if not agrees:
+                return None, "needs_llm", {}
         return sc_root_to_internal(b), reason, {}
     if reason == "excluded":
         return None, "excluded", {}
