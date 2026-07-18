@@ -17,6 +17,20 @@ def walk_registry(buckets, parent_path=None):
     return out
 
 
+# Catch-all global dirs (#55): EVERY session reads user-level skills and writes
+# auto-memory under these, so a registry claim on the bare dir gains evidence
+# from sessions that belong to other buckets. Deeper claims (a specific skill
+# subfolder) are fine — only the exact bare-dir claim is rejected.
+CATCHALL_GLOBAL_DIRS = frozenset({
+    str(Path.home() / ".claude" / "projects"),
+    str(Path.home() / ".claude" / "skills"),
+})
+
+
+def _is_catchall(src):
+    return str(Path(src.rstrip("/")).expanduser()) in CATCHALL_GLOBAL_DIRS
+
+
 def match_file_to_bucket(filepath, flat_buckets_sorted, excluded_paths):
     if not filepath or not filepath.startswith("/"):
         return None
@@ -27,9 +41,23 @@ def match_file_to_bucket(filepath, flat_buckets_sorted, excluded_paths):
     for b in flat_buckets_sorted:
         for src in b["source_paths"]:
             src_n = src.rstrip("/")
+            if _is_catchall(src_n):
+                continue
             if fp == src_n or fp.startswith(src_n + "/"):
                 return tuple(b["path"])
     return None
+
+
+def catchall_claims(flat_buckets):
+    """Registry hygiene (#55): every (bucket_path, source_path) claiming a bare
+    catch-all global dir. Consumers warn on these — the matcher already refuses
+    them as evidence, but the registry entry itself is the mistake to fix."""
+    out = []
+    for b in flat_buckets:
+        for src in b["source_paths"]:
+            if _is_catchall(src):
+                out.append((tuple(b["path"]), src))
+    return out
 
 
 def _is_self_memory(filepath, encoded):

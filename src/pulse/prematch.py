@@ -40,7 +40,17 @@ from classify import (  # noqa: F401,E402
     sc_root_to_internal,
     classify_session,
     classify_meeting,
+    catchall_claims,
 )
+
+
+def warn_catchall_claims(flat_buckets, out=sys.stderr):
+    """Registry hygiene (#55): a bare global-dir claim can't count as evidence
+    (the matcher refuses it) — warn so the registry entry itself gets fixed."""
+    for path, src in catchall_claims(flat_buckets):
+        print(f"WARNING: bucket {' > '.join(path)} claims catch-all global dir "
+              f"{src} — remove it from additional_paths; it cannot count as "
+              f"evidence (#55)", file=out)
 
 
 def main():
@@ -63,6 +73,7 @@ def main():
             rules = yaml.safe_load(f) or {}
     launch_dir_exact = rules.get("session_launch_dir_exact") or {}
     flat_buckets_sorted = sorted(walk_registry(registry["buckets"]), key=lambda b: -b["depth"])
+    warn_catchall_claims(flat_buckets_sorted)
     excluded_paths = registry.get("exclude_paths") or []
 
     with open(args.sessions) as f:
