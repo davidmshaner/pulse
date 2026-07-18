@@ -874,8 +874,8 @@ Run: `python3 -m pytest tests/test_timecore_sync.py -q`
 
 ```bash
 cp src/pulse/timecore/classify.py \
-   /Users/davidshaner/dev/chief_of_staff/.claude/skills/code-blocks/blocks/timecore/classify.py
-cd /Users/davidshaner/dev/chief_of_staff && \
+   <monorepo>/.claude/skills/code-blocks/blocks/timecore/classify.py
+cd <monorepo> && \
   git add .claude/skills/code-blocks/blocks/timecore/classify.py && \
   git commit -m "sync(timecore): mirror classify.py from pulse — launch_dir_exact (#40) + classify_session (pulse#58)" && \
   cd - >/dev/null
@@ -885,7 +885,7 @@ cd /Users/davidshaner/dev/chief_of_staff && \
 
 - [ ] **Step 4: Verify identity + commit the test**
 
-Run: `diff src/pulse/timecore/classify.py /Users/davidshaner/dev/chief_of_staff/.claude/skills/code-blocks/blocks/timecore/classify.py && echo IDENTICAL`
+Run: `diff src/pulse/timecore/classify.py <monorepo>/.claude/skills/code-blocks/blocks/timecore/classify.py && echo IDENTICAL`
 Expected: `IDENTICAL`.
 
 ```bash
@@ -904,7 +904,7 @@ git commit -m "test: guard vendored/canonical timecore classify.py byte-identity
 - [ ] **Step 1: Seed the real corpus (explicit paths — user data lives in the MAIN checkout)**
 
 ```bash
-MAIN=/Users/davidshaner/dev/chief_of_staff/projects/personal/pulse
+MAIN=<main-pulse-checkout>
 python3 src/pulse/golden.py \
   --golden   $MAIN/golden-classifications.yaml \
   --registry $MAIN/bucket-registry.yaml \

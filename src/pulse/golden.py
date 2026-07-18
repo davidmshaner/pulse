@@ -36,7 +36,10 @@ def load_golden(path):
     if not p.exists():
         return {"entries": []}
     with open(p) as f:
-        return yaml.safe_load(f) or {"entries": []}
+        data = yaml.safe_load(f) or {"entries": []}
+    if not data.get("entries"):
+        data["entries"] = []
+    return data
 
 
 def save_golden(path, data):
@@ -132,11 +135,12 @@ def format_failures(mismatches):
     """Human-readable verdict table for the pytest gate."""
     stale = [m for m in mismatches if m["kind"] == "stale"]
     conf = [m for m in mismatches if m["kind"] == "confirmed"]
-    prov = [m for m in mismatches if m["kind"] == "provisional"]
+    prov = [m for m in mismatches if m["kind"] not in ("stale", "confirmed")]
     lines = []
     if stale:
         lines.append(f"{len(stale)} stale label(s) — expected bucket no longer in registry:")
-        lines += [f"  {m['entry']['id']}: {m['entry']['expected_bucket']}" for m in stale]
+        lines += [f"  {m['entry']['id']}: {m['entry']['expected_bucket']} -> {m['got']} ({m['reason']}) [stale label]"
+                  for m in stale]
     if conf:
         lines.append(f"{len(conf)} REGRESSION against hand-validated truth:")
         lines += [f"  {m['entry']['id']}: {m['entry']['expected_bucket']} -> {m['got']} ({m['reason']})"

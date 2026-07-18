@@ -74,12 +74,25 @@ def test_none_expected_matches_needs_llm(tmp_path):
     assert G.compute_mismatches(g, flat, exc, lde, valid) == []
 
 
+def test_none_expected_flags_mismatch_when_replay_finds_bucket(tmp_path):
+    flat, exc, lde, valid = _inputs(tmp_path)
+    g = {"entries": [_entry(expected=None, edits={"/w/beta/x": 1})]}
+    mm = G.compute_mismatches(g, flat, exc, lde, valid)
+    assert len(mm) == 1 and mm[0]["got"] == ["beta"] and mm[0]["kind"] == "provisional"
+
+
 def test_save_load_roundtrip(tmp_path):
     p = tmp_path / "golden.yaml"
     data = {"entries": [_entry()]}
     G.save_golden(p, data)
     assert G.load_golden(p) == data
     assert G.load_golden(tmp_path / "absent.yaml") == {"entries": []}
+
+
+def test_load_golden_normalizes_bare_entries_key(tmp_path):
+    p = tmp_path / "golden.yaml"
+    p.write_text("entries:\n")
+    assert G.load_golden(p) == {"entries": []}
 
 
 def _fake_prematch(tmp_path, sessions):
