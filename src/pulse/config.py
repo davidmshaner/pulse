@@ -77,6 +77,9 @@ REGISTRY = _resolve(_cfg["registry"]) if _cfg.get("registry") else DATA_DIR / "b
 LEARNINGS = _resolve(_cfg["learnings"]) if _cfg.get("learnings") else DATA_DIR / "learnings.yaml"
 RULES = _resolve(_cfg["rules"]) if _cfg.get("rules") else DATA_DIR / "disambiguation-rules.yaml"
 GOLDEN = _resolve(_cfg["golden"]) if _cfg.get("golden") else DATA_DIR / "golden-classifications.yaml"
+# Per-session manual overrides (#64): a user's hand verdict on a session the
+# cascade intentionally declines (whisper-ambiguous). Gitignored user data.
+OVERRIDES = _resolve(_cfg["overrides"]) if _cfg.get("overrides") else DATA_DIR / "session-overrides.yaml"
 
 _cal = _cfg.get("calendar") or {}
 CALENDAR_SELF_EMAILS = list(_cal.get("self_emails", []))

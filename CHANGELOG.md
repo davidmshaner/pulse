@@ -24,6 +24,13 @@ All notable changes to Pulse are documented here. Format follows
   count; `prematch` warns when the registry carries a catch-all claim (#55)
 
 ### Added
+- Per-session manual overrides: `session-overrides.yaml` (gitignored; path
+  config-relocatable like the registry/rules) maps a session's JSONL basename to a
+  bucket path, applied only where the cascade returns `needs_llm` — so a hand
+  verdict on a whisper-ambiguous session sticks instead of recurring in
+  `uncategorized.json` until it ages out. Real file evidence still wins over an
+  override; `setup/RESOLVE.md` documents when to teach the registry vs write an
+  override (#64)
 - Classification golden corpus: hand-validated regression gate for classifier
   heuristic changes — `golden-classifications.yaml` (gitignored) + pytest gate +
   `python3 src/pulse/golden.py seed|review|status` (#58)

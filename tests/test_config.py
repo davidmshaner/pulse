@@ -36,7 +36,7 @@ def test_categorization_inputs_decoupled_from_deploy_week():
     # Standalone contract: registry/learnings/rules resolve to absolute paths
     # (repo-local by default, user-overridable), and config no longer hardcodes a
     # deploy-week checkout. A clean clone has neither SCRIPTS nor DEPLOY_WEEK.
-    for p in (config.REGISTRY, config.LEARNINGS, config.RULES):
+    for p in (config.REGISTRY, config.LEARNINGS, config.RULES, config.OVERRIDES):
         assert p.is_absolute(), p
     assert not hasattr(config, "DEPLOY_WEEK"), "config still exposes DEPLOY_WEEK"
     assert not hasattr(config, "SCRIPTS"), "config still exposes SCRIPTS"
