@@ -126,11 +126,44 @@ def test_session_without_filepath_is_tolerated(tmp_path):
     assert res["stats"]["sessions_needs_llm"] == 1
 
 
-def test_config_exposes_overrides_path():
-    # Same pattern as REGISTRY/RULES/GOLDEN: repo-local default, config.yaml
-    # may relocate it. Never a literal repo-root path in consumers.
-    assert isinstance(config.OVERRIDES, Path)
-    assert config.OVERRIDES.name == "session-overrides.yaml"
+def test_null_override_entry_is_skipped(tmp_path):
+    # 'abc123.jsonl:' with nothing after the colon — the easiest hand-edit
+    # mistake. Must not crash prematch (it runs under check=True); the session
+    # stays needs_llm so RESOLVE resurfaces it.
+    res = _run_prematch(tmp_path, [dict(WHISPER_SESSION)],
+                        overrides={"sessions": {"abc123.jsonl": None}})
+    assert res["stats"]["sessions_needs_llm"] == 1
+
+
+def test_nested_map_override_value_is_skipped(tmp_path):
+    # Mis-indented YAML turns the bucket list into a nested map.
+    res = _run_prematch(tmp_path, [dict(WHISPER_SESSION)],
+                        overrides={"sessions": {"abc123.jsonl": {"bucket": "ClientA"}}})
+    assert res["stats"]["sessions_needs_llm"] == 1
+
+
+def test_yaml_syntax_error_is_tolerated(tmp_path):
+    ov = tmp_path / "broken.yaml"
+    ov.write_text("sessions:\n  abc123.jsonl: [unclosed\n")
+    res = _run_prematch(tmp_path, [dict(WHISPER_SESSION)], overrides_path=ov)
+    assert res["stats"]["sessions_needs_llm"] == 1
+
+
+def test_non_dict_top_level_is_tolerated(tmp_path):
+    ov = tmp_path / "list.yaml"
+    ov.write_text("- abc123.jsonl\n")
+    res = _run_prematch(tmp_path, [dict(WHISPER_SESSION)], overrides_path=ov)
+    assert res["stats"]["sessions_needs_llm"] == 1
+
+
+def test_unregistered_bucket_override_is_dropped(tmp_path):
+    # A typo'd bucket ('ClienA') would route hours to a phantom path no
+    # engagement matches, while the session leaves uncategorized.json — a
+    # silent permanent undercount. Must be dropped (session stays needs_llm)
+    # with a warning, not applied.
+    res = _run_prematch(tmp_path, [dict(WHISPER_SESSION)],
+                        overrides={"sessions": {"abc123.jsonl": ["ClienA"]}})
+    assert res["stats"]["sessions_needs_llm"] == 1
 
 
 def test_uncategorized_brief_carries_session_file(tmp_path):
@@ -141,21 +174,31 @@ def test_uncategorized_brief_carries_session_file(tmp_path):
     assert brief["session_file"] == "abc123.jsonl"
 
 
-def test_run_prematch_passes_overrides_path(monkeypatch):
-    calls = []
-
-    def fake_run(cmd, *a, **k):
-        calls.append(cmd)
-        if "--out" in cmd:
-            Path(cmd[cmd.index("--out") + 1]).write_text("{}")
-
-        class _R:
-            returncode = 0
-
-        return _R()
-
-    monkeypatch.setattr(snapshot.subprocess, "run", fake_run)
+def test_run_prematch_passes_overrides_path(tmp_path, monkeypatch):
+    from test_standalone_pipeline import _capture
+    # Point the cache at tmp_path so the fake's --out write can't clobber the
+    # real .cache/prematch.json of a live checkout (the #61 trap).
+    monkeypatch.setattr(snapshot, "CACHE", tmp_path)
+    calls = _capture(monkeypatch)
     snapshot.run_prematch(Path("/tmp/s.json"), Path("/tmp/m.json"))
     (cmd,) = calls
     assert "--overrides" in cmd
     assert cmd[cmd.index("--overrides") + 1] == str(config.OVERRIDES)
+
+
+def test_run_prematch_surfaces_stderr_on_failure(tmp_path, monkeypatch):
+    # The overrides file is the first hand-edited input feeding this
+    # subprocess; when prematch fails, the traceback naming the user's file
+    # must reach the caller instead of dying inside capture_output.
+    monkeypatch.setattr(snapshot, "CACHE", tmp_path)
+
+    def fake_run(cmd, *a, **k):
+        raise snapshot.subprocess.CalledProcessError(
+            2, cmd, stderr=b"boom: session-overrides.yaml line 3")
+
+    monkeypatch.setattr(snapshot.subprocess, "run", fake_run)
+    try:
+        snapshot.run_prematch(Path("/tmp/s.json"), Path("/tmp/m.json"))
+        raise AssertionError("expected run_prematch to raise")
+    except RuntimeError as e:
+        assert "session-overrides.yaml line 3" in str(e)

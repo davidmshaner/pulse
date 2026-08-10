@@ -40,8 +40,9 @@ python3 -c "import config; print('registry:', config.REGISTRY); print('learnings
 - **`overrides`** (`session-overrides.yaml`): hand verdicts for *specific sessions* the
   classifier deliberately declines (see step 3). May not exist yet — create it on first use.
 
-Read all three so you match their existing shape and category names exactly. Use a
-category that already exists unless the work is genuinely a new project.
+Read all of them so you match their existing shape and category names exactly (the
+overrides file may not exist yet — create it on first use). Use a category that
+already exists unless the work is genuinely a new project.
 
 ## 3. Resolve each session
 

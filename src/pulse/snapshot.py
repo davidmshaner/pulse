@@ -21,6 +21,7 @@ import yaml
 PKG_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(PKG_DIR))
 import config  # noqa: E402
+import prematch  # noqa: E402 — session_key: the override-key contract (#64)
 import scan_codex  # noqa: E402
 import scan_cowork  # noqa: E402
 import updatecheck  # noqa: E402
@@ -132,17 +133,24 @@ def run_fetch_meetings(start: datetime, end: datetime) -> Path:
 
 def run_prematch(sessions_path: Path, meetings_path: Path) -> dict:
     out = CACHE / "prematch.json"
-    subprocess.run(
-        [sys.executable, str(SCRIPTS / "prematch.py"),
-         "--sessions",  str(sessions_path),
-         "--meetings",  str(meetings_path),
-         "--registry",  str(config.REGISTRY),
-         "--learnings", str(config.LEARNINGS),
-         "--rules",     str(config.RULES),
-         "--overrides", str(config.OVERRIDES),
-         "--out",       str(out)],
-        check=True, capture_output=True,
-    )
+    try:
+        subprocess.run(
+            [sys.executable, str(SCRIPTS / "prematch.py"),
+             "--sessions",  str(sessions_path),
+             "--meetings",  str(meetings_path),
+             "--registry",  str(config.REGISTRY),
+             "--learnings", str(config.LEARNINGS),
+             "--rules",     str(config.RULES),
+             "--overrides", str(config.OVERRIDES),
+             "--out",       str(out)],
+            check=True, capture_output=True,
+        )
+    except subprocess.CalledProcessError as e:
+        # prematch now reads hand-edited input (session-overrides.yaml); a
+        # swallowed stderr would leave the user with a dead snapshot and no
+        # pointer to the file they just broke.
+        stderr = e.stderr.decode(errors="replace") if isinstance(e.stderr, bytes) else (e.stderr or "")
+        raise RuntimeError(f"prematch failed (exit {e.returncode}):\n{stderr[-2000:]}") from e
     with open(out) as f:
         return json.load(f)
 
@@ -349,7 +357,7 @@ def _session_brief(s: dict) -> dict:
     return {
         "project_dir": _decode_project(s.get("encoded")),
         # The override key for setup/RESOLVE.md's session-overrides.yaml (#64).
-        "session_file": Path(s.get("filepath") or "").name or None,
+        "session_file": prematch.session_key(s),
         "top_files": [p for p, _ in top],
         "first_message": (s.get("first_msg") or "")[:200],
         "reason": s.get("reason"),
