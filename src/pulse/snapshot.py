@@ -139,6 +139,7 @@ def run_prematch(sessions_path: Path, meetings_path: Path) -> dict:
          "--registry",  str(config.REGISTRY),
          "--learnings", str(config.LEARNINGS),
          "--rules",     str(config.RULES),
+         "--overrides", str(config.OVERRIDES),
          "--out",       str(out)],
         check=True, capture_output=True,
     )
@@ -347,6 +348,8 @@ def _session_brief(s: dict) -> dict:
     top = sorted(edits.items(), key=lambda kv: -kv[1])[:5] if isinstance(edits, dict) else []
     return {
         "project_dir": _decode_project(s.get("encoded")),
+        # The override key for setup/RESOLVE.md's session-overrides.yaml (#64).
+        "session_file": Path(s.get("filepath") or "").name or None,
         "top_files": [p for p, _ in top],
         "first_message": (s.get("first_msg") or "")[:200],
         "reason": s.get("reason"),

@@ -4,6 +4,7 @@ learnings.yaml
 disambiguation-rules.yaml
 golden-classifications.yaml
 golden-classifications.yaml.tmp
+session-overrides.yaml
 state.json
 state.json.tmp
 .cache/

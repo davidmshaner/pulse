@@ -44,6 +44,31 @@ from classify import (  # noqa: F401,E402
 )
 
 
+def load_session_overrides(path):
+    """session-overrides.yaml (#64) — {sessions: {<jsonl-basename>: [bucket, path]}}.
+    User data (gitignored), so a missing/empty file is the normal case."""
+    if not path:
+        return {}
+    p = Path(path)
+    if not p.exists():
+        return {}
+    with open(p) as f:
+        data = yaml.safe_load(f) or {}
+    return data.get("sessions") or {}
+
+
+def apply_session_override(sess, overrides):
+    """Returns the override bucket path for this session, or None. Keyed on the
+    session JSONL basename — the one stable per-session identity."""
+    if not overrides:
+        return None
+    name = Path(sess.get("filepath") or "").name
+    if not name or name not in overrides:
+        return None
+    bucket = overrides[name]
+    return [bucket] if isinstance(bucket, str) else list(bucket)
+
+
 def warn_catchall_claims(flat_buckets, out=sys.stderr):
     """Registry hygiene (#55): a bare global-dir claim can't count as evidence
     (the matcher refuses it) — warn so the registry entry itself gets fixed."""
@@ -60,6 +85,9 @@ def main():
     ap.add_argument("--registry", required=True)
     ap.add_argument("--learnings", required=True)
     ap.add_argument("--rules", required=False, help="disambiguation-rules.yaml (read-only for now)")
+    ap.add_argument("--overrides", required=False,
+                    help="session-overrides.yaml — per-session hand verdicts (#64); "
+                         "missing file is fine (most users have none)")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
 
@@ -72,6 +100,7 @@ def main():
         with open(args.rules) as f:
             rules = yaml.safe_load(f) or {}
     launch_dir_exact = rules.get("session_launch_dir_exact") or {}
+    session_overrides = load_session_overrides(args.overrides)
     flat_buckets_sorted = sorted(walk_registry(registry["buckets"]), key=lambda b: -b["depth"])
     warn_catchall_claims(flat_buckets_sorted)
     excluded_paths = registry.get("exclude_paths") or []
@@ -90,6 +119,14 @@ def main():
         b, reason, scores = classify_session(s, flat_buckets_sorted, excluded_paths, launch_dir_exact)
         if reason == "excluded":
             continue
+        if b is None:
+            # Manual override (#64): fills ONLY the needs_llm gap — the shapes
+            # the cascade intentionally declines (e.g. an off-branch sub-floor
+            # read whisper). Real evidence above always wins, so a stale entry
+            # can't mask a genuinely different session.
+            ob = apply_session_override(s, session_overrides)
+            if ob:
+                b, reason = ob, "manual_override"
         s["bucket_path"] = b
         s["reason"] = reason
         s["evidence_scores"] = scores

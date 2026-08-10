@@ -18,8 +18,9 @@ pulse repo first. Every path below is relative to it.
 
 Read `uncategorized.json` in the repo root. It has two lists:
 
-- `sessions`: each has `project_dir` (where the Claude Code session ran), `top_files`
-  (the files it changed most — the real signal for *where the work landed*),
+- `sessions`: each has `project_dir` (where the Claude Code session ran), `session_file`
+  (the transcript's JSONL basename — the key for a per-session override, step 3),
+  `top_files` (the files it changed most — the real signal for *where the work landed*),
   `first_message` (what it was about), and `reason`.
 - `meetings`: each has `title`, `attendees` (co-attendee emails), and `start`.
 
@@ -29,13 +30,15 @@ Pulse's category rules may be repo-local or pointed elsewhere by `config.yaml`. 
 the real paths first:
 
 ```bash
-python3 -c "import config; print('registry:', config.REGISTRY); print('learnings:', config.LEARNINGS); print('rules:', config.RULES)"
+python3 -c "import config; print('registry:', config.REGISTRY); print('learnings:', config.LEARNINGS); print('rules:', config.RULES); print('overrides:', config.OVERRIDES)"
 ```
 
 - **`registry`** (`bucket-registry.yaml`): maps a repo/folder root → a project category.
 - **`learnings`** (`learnings.yaml`): maps a person's email → a project path. This is how
   a meeting gets attributed by who attended.
 - **`rules`** (`disambiguation-rules.yaml`): tie-breakers for ambiguous folders.
+- **`overrides`** (`session-overrides.yaml`): hand verdicts for *specific sessions* the
+  classifier deliberately declines (see step 3). May not exist yet — create it on first use.
 
 Read all three so you match their existing shape and category names exactly. Use a
 category that already exists unless the work is genuinely a new project.
@@ -47,6 +50,24 @@ work *landed*, not where the session started). Then in `bucket-registry.yaml`, a
 adjust the mapping so that repo root → the right category. If a folder legitimately maps
 to more than one project depending on subpath, add a rule in `disambiguation-rules.yaml`
 instead. Match the existing YAML structure exactly.
+
+**If no folder mapping can express the verdict** — the classic shape is a session whose
+only edit was its own auto-memory and whose only read was one reference file in a
+*different* project's folder (the classifier declines these on purpose: the same shape
+has opposite truths in different sessions) — write a per-session override instead of
+bending the registry. In the `overrides` file (`session-overrides.yaml`), map the
+session's JSONL basename to the bucket path:
+
+```yaml
+sessions:
+  9f0ddf35-c59e-49c5-86a3-f0830fc8a88e.jsonl: [SC, ClientA]
+```
+
+The basename is the session's `session_file` field in `uncategorized.json`. Overrides fill only the
+"couldn't decide" gap — a session with real file evidence keeps its evidence-based
+category — and entries for sessions that have aged out of the window are harmless.
+Teach the registry/learnings when a *mapping* is missing; write an override only for a
+*one-off session* the cascade rightly refuses to generalize.
 
 ## 4. Resolve each meeting
 
