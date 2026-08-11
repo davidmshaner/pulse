@@ -18,7 +18,10 @@ Against the Pulse repo:
   is fine only as a secondary hint next to the symbol). Never invent a path; say "none found". (Orientation:
   `app.py` is the rumps menu-bar entry; `scan_sessions.py` / `scan_cowork.py` read Claude Code
   JSONL; `live_bucket.py` / `snapshot.py` do the time accounting; `fetch_meetings.py` pulls
-  calendar; `config.py` owns `PKG_DIR`/`DATA_DIR`; `frontend_common.py` / `app_win.py` the UI.)
+  calendar; `config.py` owns `PKG_DIR`/`DATA_DIR`; `frontend_common.py` / `app_win.py` the UI.
+  Panel/template/view-model changes have EXTRA consumers outside `src/pulse/`: `tools/render_hero.py`
+  and `tools/render_og.py` inject their own view models into `panel/template.html` — cite them or a
+  VM-shape change silently breaks the README hero, learned on #66.)
 - **Spec / plan:** look under `docs/specs/` and `docs/plans/` (and `docs/superpowers/`) for a related
   design; name it.
 - **Gotchas:** scan `process/conventions.md` "Known issues" and cite any the work risks tripping
