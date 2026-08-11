@@ -14,7 +14,8 @@ from pathlib import Path
 WIDGET = Path(__file__).resolve().parent.parent / 'src' / 'pulse'
 sys.path.insert(0, str(WIDGET))
 
-from snapshot import engagement_caps, _group_overlap, apply_remainder, WEEKS_PER_MONTH  # noqa: E402
+from snapshot import (engagement_caps, _group_overlap, apply_remainder,  # noqa: E402
+                      direct_engagement_members, WEEKS_PER_MONTH)
 
 
 def _approx(a, b, eps=1e-6):
@@ -76,6 +77,25 @@ def test_apply_remainder_subtracts_only_descendants():
     assert sc["remainder"] is True
     assert set(sc["remainder_minus"]) == {"GI", "Redacted"}   # Personal is NOT under SC
     assert est["Personal"]["wtd"]["actual_h"] == 4.16   # untouched
+
+
+def test_direct_engagement_members_filters_subgroups():
+    # 'Sub' is a group name, not an engagement — only engagement names survive,
+    # in config order (#66).
+    engs = ["ClientA", "ClientB", "Solo"]
+    assert direct_engagement_members(["ClientB", "Sub", "ClientA"], engs) == ["ClientB", "ClientA"]
+
+
+def test_direct_engagement_members_wildcard_claims_nothing():
+    # '*' is a roll-up statement, not a hierarchy claim — honoring it would let
+    # a catch-all group (or the synthesized legacy total_budget 'Billable')
+    # steal every engagement from the groups that explicitly list them.
+    assert direct_engagement_members("*", ["A", "B"]) == []
+
+
+def test_direct_engagement_members_empty():
+    assert direct_engagement_members(None, ["A"]) == []
+    assert direct_engagement_members([], ["A"]) == []
 
 
 if __name__ == "__main__":

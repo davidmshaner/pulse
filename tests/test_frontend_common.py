@@ -146,3 +146,106 @@ if __name__ == "__main__":
             failed += 1; print(f"FAIL  {t.__name__}\n  {e}")
     print(f"\n=== {failed}/{len(tests)} FAILED ===" if failed else f"=== all {len(tests)} passed ===")
     sys.exit(1 if failed else 0)
+
+
+# --- nested engagement rows (issue #66) -----------------------------------
+# menu_lines interleaves engagement members into their group's subtree with an
+# indent one level deeper than the parent; unclaimed engagements stay flat at
+# the end. iter_rows is the shared walk both frontends consume.
+
+MEMBER_STATE = {
+    "groups": [
+        {"name": "All Work", "depth": 0, "weekly_cap_h": 40, "monthly_cap_h": 160,
+         "today_h": 6.0, "wtd": {"actual_h": 22.0, "hours_left": 18.0, "over": False},
+         "7d": {"actual_h": 23.0}, "30d": {"actual_h": 86.0},
+         "direct_engagements": []},
+        {"name": "Billable", "depth": 1, "weekly_cap_h": 20, "monthly_cap_h": 80,
+         "today_h": 3.0, "wtd": {"actual_h": 18.0, "hours_left": 2.0, "over": False},
+         "7d": {"actual_h": 20.0}, "30d": {"actual_h": 70.0},
+         "direct_engagements": ["ClientA"]},
+    ],
+    "engagements": {
+        "ClientA": {"track_only": False, "weekly_cap_h": 8.0, "monthly_cap_h": 35, "today_h": 0.0,
+                    "wtd": {"actual_h": 2.0, "hours_left": 6.0, "over": False},
+                    "7d": {"actual_h": 2.0}, "30d": {"actual_h": 9.0}},
+        "Loose": {"track_only": True, "weekly_cap_h": None, "monthly_cap_h": None, "today_h": 0.0,
+                  "wtd": {"actual_h": 3.0}, "7d": {"actual_h": 3.0}, "30d": {"actual_h": 12.0}},
+    },
+    "generated_at": "2026-08-11T11:00:00",
+}
+
+
+def test_iter_rows_interleaves_members_after_subtree():
+    rows = [(k, n, d) for k, n, _, d in fc.iter_rows(MEMBER_STATE)]
+    assert rows == [("group", "All Work", 0), ("group", "Billable", 1),
+                    ("engagement", "ClientA", 2), ("engagement", "Loose", 0)], rows
+
+
+def test_iter_rows_legacy_total_fallback():
+    legacy = {"total": {"weekly_cap_h": 32, "monthly_cap_h": 128, "today_h": 0.0,
+                        "wtd": {"actual_h": 1.0, "hours_left": 31.0, "over": False},
+                        "7d": {"actual_h": 1.0}, "30d": {"actual_h": 4.0}},
+              "engagements": {}}
+    rows = [(k, n, d) for k, n, _, d in fc.iter_rows(legacy)]
+    assert rows == [("group", "Billable", 0)]
+
+
+def test_menu_lines_member_engagement_indented_inside_group():
+    lines = fc.menu_lines(MEMBER_STATE)
+    txt = [l for l in lines if l]
+    client = [l for l in txt if "ClientA" in l][0]
+    assert client.startswith("    ")                    # depth 2 -> two indent stops
+    idx = {name: next(i for i, l in enumerate(txt) if name in l)
+           for name in ("BILLABLE", "ClientA", "Loose")}
+    assert idx["BILLABLE"] < idx["ClientA"] < idx["Loose"]
+
+
+def test_menu_lines_unclaimed_engagement_stays_flat():
+    lines = [l for l in fc.menu_lines(MEMBER_STATE) if l]
+    loose = [l for l in lines if "Loose" in l][0]
+    assert loose.startswith("  Loose")                  # today's exact un-nested line
+
+
+def test_iter_rows_deepest_listing_parent_wins():
+    # An engagement listed by BOTH a parent and its sub-group nests under the
+    # sub-group (most-specific), not the first-visited outer group.
+    s = {"groups": [
+            {"name": "Billable", "depth": 0, "weekly_cap_h": 20, "monthly_cap_h": 80,
+             "today_h": 0.0, "wtd": {"actual_h": 5.0, "hours_left": 15.0, "over": False},
+             "7d": {"actual_h": 5.0}, "30d": {"actual_h": 20.0},
+             "direct_engagements": ["ClientA", "ClientB"]},
+            {"name": "Sub", "depth": 1, "weekly_cap_h": None, "monthly_cap_h": None,
+             "track_only": True, "today_h": 0.0, "wtd": {"actual_h": 2.0},
+             "7d": {"actual_h": 2.0}, "30d": {"actual_h": 8.0},
+             "direct_engagements": ["ClientA"]},
+         ],
+         "engagements": {
+            "ClientA": {"track_only": True, "weekly_cap_h": None, "monthly_cap_h": None,
+                        "today_h": 0.0, "wtd": {"actual_h": 2.0},
+                        "7d": {"actual_h": 2.0}, "30d": {"actual_h": 8.0}},
+            "ClientB": {"track_only": True, "weekly_cap_h": None, "monthly_cap_h": None,
+                        "today_h": 0.0, "wtd": {"actual_h": 3.0},
+                        "7d": {"actual_h": 3.0}, "30d": {"actual_h": 12.0}},
+         }}
+    rows = [(k, n, d) for k, n, _, d in fc.iter_rows(s)]
+    assert rows == [("group", "Billable", 0), ("group", "Sub", 1),
+                    ("engagement", "ClientA", 2), ("engagement", "ClientB", 1)], rows
+
+
+def test_iter_rows_wildcard_style_empty_direct_renders_flat():
+    # A group with no direct_engagements (e.g. a wildcard '*' roll-up, or the
+    # synthesized legacy total_budget 'Billable') claims nothing — engagements
+    # keep the flat pre-#66 tail.
+    s = {"groups": [
+            {"name": "Billable", "depth": 0, "weekly_cap_h": 20, "monthly_cap_h": 80,
+             "today_h": 0.0, "wtd": {"actual_h": 5.0, "hours_left": 15.0, "over": False},
+             "7d": {"actual_h": 5.0}, "30d": {"actual_h": 20.0},
+             "direct_engagements": []},
+         ],
+         "engagements": {
+            "ClientA": {"track_only": True, "weekly_cap_h": None, "monthly_cap_h": None,
+                        "today_h": 0.0, "wtd": {"actual_h": 2.0},
+                        "7d": {"actual_h": 2.0}, "30d": {"actual_h": 8.0}},
+         }}
+    rows = [(k, n, d) for k, n, _, d in fc.iter_rows(s)]
+    assert rows == [("group", "Billable", 0), ("engagement", "ClientA", 0)], rows
