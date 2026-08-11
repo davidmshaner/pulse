@@ -204,3 +204,48 @@ def test_menu_lines_unclaimed_engagement_stays_flat():
     lines = [l for l in fc.menu_lines(MEMBER_STATE) if l]
     loose = [l for l in lines if "Loose" in l][0]
     assert loose.startswith("  Loose")                  # today's exact un-nested line
+
+
+def test_iter_rows_deepest_listing_parent_wins():
+    # An engagement listed by BOTH a parent and its sub-group nests under the
+    # sub-group (most-specific), not the first-visited outer group.
+    s = {"groups": [
+            {"name": "Billable", "depth": 0, "weekly_cap_h": 20, "monthly_cap_h": 80,
+             "today_h": 0.0, "wtd": {"actual_h": 5.0, "hours_left": 15.0, "over": False},
+             "7d": {"actual_h": 5.0}, "30d": {"actual_h": 20.0},
+             "direct_engagements": ["ClientA", "ClientB"]},
+            {"name": "Sub", "depth": 1, "weekly_cap_h": None, "monthly_cap_h": None,
+             "track_only": True, "today_h": 0.0, "wtd": {"actual_h": 2.0},
+             "7d": {"actual_h": 2.0}, "30d": {"actual_h": 8.0},
+             "direct_engagements": ["ClientA"]},
+         ],
+         "engagements": {
+            "ClientA": {"track_only": True, "weekly_cap_h": None, "monthly_cap_h": None,
+                        "today_h": 0.0, "wtd": {"actual_h": 2.0},
+                        "7d": {"actual_h": 2.0}, "30d": {"actual_h": 8.0}},
+            "ClientB": {"track_only": True, "weekly_cap_h": None, "monthly_cap_h": None,
+                        "today_h": 0.0, "wtd": {"actual_h": 3.0},
+                        "7d": {"actual_h": 3.0}, "30d": {"actual_h": 12.0}},
+         }}
+    rows = [(k, n, d) for k, n, _, d in fc.iter_rows(s)]
+    assert rows == [("group", "Billable", 0), ("group", "Sub", 1),
+                    ("engagement", "ClientA", 2), ("engagement", "ClientB", 1)], rows
+
+
+def test_iter_rows_wildcard_style_empty_direct_renders_flat():
+    # A group with no direct_engagements (e.g. a wildcard '*' roll-up, or the
+    # synthesized legacy total_budget 'Billable') claims nothing — engagements
+    # keep the flat pre-#66 tail.
+    s = {"groups": [
+            {"name": "Billable", "depth": 0, "weekly_cap_h": 20, "monthly_cap_h": 80,
+             "today_h": 0.0, "wtd": {"actual_h": 5.0, "hours_left": 15.0, "over": False},
+             "7d": {"actual_h": 5.0}, "30d": {"actual_h": 20.0},
+             "direct_engagements": []},
+         ],
+         "engagements": {
+            "ClientA": {"track_only": True, "weekly_cap_h": None, "monthly_cap_h": None,
+                        "today_h": 0.0, "wtd": {"actual_h": 2.0},
+                        "7d": {"actual_h": 2.0}, "30d": {"actual_h": 8.0}},
+         }}
+    rows = [(k, n, d) for k, n, _, d in fc.iter_rows(s)]
+    assert rows == [("group", "Billable", 0), ("engagement", "ClientA", 0)], rows

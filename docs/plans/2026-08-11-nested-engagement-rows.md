@@ -16,15 +16,20 @@ folders first, then files).
 
 ### Data (snapshot.py)
 Each group block in `state.json` gains `direct_engagements`: the group's *direct* member names
-that are engagements, in config order (`members: "*"` → every engagement). Distinct from the
-existing `members` key, which is the *resolved leaf* list used for cap math. An old state.json
-without the key renders exactly as before (flat engagement tail) — graceful downgrade.
+that are engagements, in config order. A wildcard (`members: "*"`) group claims nothing — `*` is
+a roll-up statement, not a hierarchy claim, and honoring it would steal every engagement from
+the groups that explicitly list them (including the `Billable` group synthesized for legacy
+`total_budget:` configs, which must keep the flat pre-#66 layout). Distinct from the existing
+`members` key, which is the *resolved leaf* list used for cap math. An old state.json without
+the key renders exactly as before (flat engagement tail) — graceful downgrade.
 
 ### Shared walk (frontend_common.iter_rows)
-One generator used by BOTH frontends yields `(kind, name, block, depth)` in render order via a
-stack walk: emit group; hold its direct engagements; flush them when the walk leaves that
-group's subtree; unclaimed engagements last at depth 0. An engagement claimed by two groups
-renders once, under the first (tree-order) parent. Legacy `total` fallback lives here too.
+One walk used by BOTH frontends yields `(kind, name, block, depth)` in render order via a stack
+walk: emit group; hold its direct engagements; flush them when the walk leaves that group's
+subtree; unclaimed engagements last at depth 0. An engagement listed by two groups renders once,
+under its DEEPEST listing parent (most-specific wins; ties keep the first in tree order) — so a
+parent that also lists a sub-group's engagement doesn't steal it. Legacy `total` fallback lives
+here too.
 
 ### HTML panel (render_state.py + template.html)
 `build_view_model` emits a single ordered `rows` list (replacing the `groups` + `engagements`

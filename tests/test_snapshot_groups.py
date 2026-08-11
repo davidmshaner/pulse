@@ -86,8 +86,11 @@ def test_direct_engagement_members_filters_subgroups():
     assert direct_engagement_members(["ClientB", "Sub", "ClientA"], engs) == ["ClientB", "ClientA"]
 
 
-def test_direct_engagement_members_wildcard_is_all():
-    assert direct_engagement_members("*", ["A", "B"]) == ["A", "B"]
+def test_direct_engagement_members_wildcard_claims_nothing():
+    # '*' is a roll-up statement, not a hierarchy claim — honoring it would let
+    # a catch-all group (or the synthesized legacy total_budget 'Billable')
+    # steal every engagement from the groups that explicitly list them.
+    assert direct_engagement_members("*", ["A", "B"]) == []
 
 
 def test_direct_engagement_members_empty():

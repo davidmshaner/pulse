@@ -10,6 +10,9 @@ bar. The `day` block is always cap-less (no daily cap exists), so every row
 renders track-style under the day view."""
 from __future__ import annotations
 
+# Flat sibling import, like every module in src/pulse: callers put src/pulse on
+# sys.path (app.py, app_win.py, the tests) — `panel` is a top-level package
+# there, so a relative import can't reach the sibling module.
 import frontend_common
 
 

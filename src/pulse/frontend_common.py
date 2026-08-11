@@ -122,33 +122,45 @@ def iter_rows(state: dict) -> list:
     state.json -> no nesting) are held on a stack and emitted when the walk leaves
     that group's subtree — so a section reads group, sub-group subtrees, then its
     own engagements, one level deeper. An engagement claimed by two groups renders
-    once, under the first tree-order parent; engagements in no group come last at
+    once, under its DEEPEST listing parent (most-specific wins; a tie keeps the
+    first in tree order) — so a parent that also lists a sub-group's engagement
+    doesn't steal it from the sub-group. Engagements in no group come last at
     depth 0, exactly the pre-#66 flat tail."""
     engs = state.get("engagements", {}) or {}
     groups = state.get("groups")
     if groups is None and state.get("total"):          # legacy state.json shape
         groups = [{**state["total"], "name": "Billable"}]
+    groups = groups or []
+
+    # Ownership pre-pass: engagement -> (depth, group index) of its deepest
+    # listing group; only a strictly deeper claim replaces, so ties keep the
+    # first tree-order parent.
+    owner: dict = {}
+    for i, g in enumerate(groups):
+        d = g.get("depth", 0)
+        for m in g.get("direct_engagements") or []:
+            if m in engs and (m not in owner or d > owner[m][0]):
+                owner[m] = (d, i)
+
     out: list = []
-    claimed: set = set()
     stack: list = []                                   # (group depth, held member rows)
 
     def flush(depth):
         while stack and stack[-1][0] >= depth:
             out.extend(stack.pop()[1])
 
-    for g in groups or []:
+    for i, g in enumerate(groups):
         d = g.get("depth", 0)
         flush(d)
         out.append(("group", g["name"], g, d))
         held = []
         for m in g.get("direct_engagements") or []:
-            if m in engs and m not in claimed:
-                claimed.add(m)
+            if owner.get(m, (None, None))[1] == i and not any(h[1] == m for h in held):
                 held.append(("engagement", m, engs[m], d + 1))
         stack.append((d, held))
     flush(0)
     for name, eng in engs.items():
-        if name not in claimed:
+        if name not in owner:
             out.append(("engagement", name, eng, 0))
     return out
 

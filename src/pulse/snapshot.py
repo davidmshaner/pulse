@@ -713,9 +713,15 @@ def direct_engagement_members(members, engagement_names):
     """A group's DIRECT member names that are engagements, in config order (#66).
     Distinct from `resolve_group_engagements` (the recursive leaf expansion used
     for cap math): sub-group members are excluded — their engagements render
-    under the sub-group, not the parent. '*' = every defined engagement."""
+    under the sub-group, not the parent.
+
+    A wildcard ('*') group claims NOTHING here: '*' is a roll-up statement
+    ("sum everything"), not a hierarchy claim, and honoring it would steal every
+    engagement from the groups that explicitly list them — including the
+    'Billable' group load_groups synthesizes for legacy `total_budget:` configs,
+    which must keep rendering the flat pre-#66 layout."""
     if _is_wildcard(members):
-        return list(engagement_names)
+        return []
     return [m for m in (members or []) if m in engagement_names]
 
 
