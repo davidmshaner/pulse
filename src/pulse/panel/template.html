@@ -204,12 +204,13 @@ function renderTime(){
     + seg('day') + '<span class="pdiv">/</span>' + seg('week')
     + '<span class="pdiv">/</span>' + seg('month')
     + '</span><span class="toggle" onclick="setView(\'people\')">people ›</span></div>';
-  (VM.groups||[]).forEach(function(g){ html += rowHTML(g); });
-  VM.engagements.forEach(function(e){ html += rowHTML(e); });
+  // One interleaved list (#66): groups and their member engagements arrive in
+  // render order from the view model — no separate engagement pass.
+  (VM.rows||[]).forEach(function(r){ html += rowHTML(r); });
   if(VM.now){ html += '<div class="now"><span><span class="dot">●</span> now: '
     + VM.now.label+'</span><span>~'+VM.now.elapsed_min+' min</span></div>'; }
   var foot = '';
-  var warns = (VM.groups||[]).filter(function(g){return g.overlap && g.overlap.length;});
+  var warns = (VM.rows||[]).filter(function(r){return r.is_group && r.overlap && r.overlap.length;});
   if(warns.length){ foot += '<div class="foot" style="color:var(--clay)">'
     + '⚠ group overlap — a member bucket contains another; check appetite.yaml</div>'; }
   if(VM.meetings_wtd){ foot += '<div class="foot"><span class="mtgcount">'

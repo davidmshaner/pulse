@@ -6,6 +6,12 @@ All notable changes to Pulse are documented here. Format follows
 
 ## [Unreleased]
 ### Changed
+- Engagement rows now nest inside their group's card section: each group's direct
+  member engagements render indented one level deeper than the group (after its
+  sub-group subtrees), in both the panel and the menu-bar text fallback, so the
+  visual hierarchy matches the configured roll-up tree — previously every
+  engagement rendered in one flat list below all groups. Engagements in no group
+  keep the flat tail; a config with no `groups:` renders unchanged (#66)
 - Minimum-confidence floor for file evidence: a single incidental read (weight 0.2)
   can no longer decide a session's bucket on its own. Sub-floor evidence is weighed
   against the launch-dir bucket instead: agreeing whispers defer to the launch dir,

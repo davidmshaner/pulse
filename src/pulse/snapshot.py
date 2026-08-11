@@ -709,6 +709,16 @@ def group_tree_order(groups):
     return ordered
 
 
+def direct_engagement_members(members, engagement_names):
+    """A group's DIRECT member names that are engagements, in config order (#66).
+    Distinct from `resolve_group_engagements` (the recursive leaf expansion used
+    for cap math): sub-group members are excluded — their engagements render
+    under the sub-group, not the parent. '*' = every defined engagement."""
+    if _is_wildcard(members):
+        return list(engagement_names)
+    return [m for m in (members or []) if m in engagement_names]
+
+
 def build_group_block(name, present, engagement_state, weekly_cap_h,
                       monthly_cap_h, depth=0):
     """One group's state block: its members' summed hours per window, its caps
@@ -1004,6 +1014,10 @@ def main() -> None:
         block = build_group_block(name, present, engagement_state,
                                   gdef.get("weekly_hours"), gdef.get("monthly_hours"),
                                   depth)
+        # Direct engagement members (#66): the frontends nest these rows inside
+        # this group's subtree instead of a flat top-level engagement list.
+        block["direct_engagements"] = direct_engagement_members(
+            gdef.get("members"), eng_names)
         # Soft overlap guard: if one member's bucket path is an ancestor of another's,
         # the sum double-counts. Detect via the resolved 30d paths and warn (never crash).
         overlap = _group_overlap(present, engagement_state, by_window["30d"])

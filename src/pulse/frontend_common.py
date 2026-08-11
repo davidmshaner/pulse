@@ -115,67 +115,116 @@ def _title_base(state: dict | None) -> str:
     return "Pulse"
 
 
-def menu_lines(state: dict | None) -> list:
-    """Flat list of text lines; None marks a separator. The rumps frontend wraps
-    each line in a MenuItem; the overlay renders them as label text."""
-    items: list = []
-    if state is None:
-        return ["(snapshot not yet run)"]
+def iter_rows(state: dict) -> list:
+    """The shared render-order walk (#66): one (kind, name, block, depth) list both
+    frontends consume. Groups arrive in snapshot tree order (with `depth`); each
+    group's DIRECT engagement members (its `direct_engagements`, absent on old
+    state.json -> no nesting) are held on a stack and emitted when the walk leaves
+    that group's subtree — so a section reads group, sub-group subtrees, then its
+    own engagements, one level deeper. An engagement claimed by two groups renders
+    once, under the first tree-order parent; engagements in no group come last at
+    depth 0, exactly the pre-#66 flat tail."""
+    engs = state.get("engagements", {}) or {}
     groups = state.get("groups")
     if groups is None and state.get("total"):          # legacy state.json shape
         groups = [{**state["total"], "name": "Billable"}]
+    out: list = []
+    claimed: set = set()
+    stack: list = []                                   # (group depth, held member rows)
+
+    def flush(depth):
+        while stack and stack[-1][0] >= depth:
+            out.extend(stack.pop()[1])
+
     for g in groups or []:
-        d7, d30 = g["7d"], g["30d"]
-        # Nested groups (#31) indent by depth; a capless roll-up shows hours only.
-        # depth 0 + a cap -> the exact lines from before nesting existed.
-        ind = "  " * g.get("depth", 0)
-        if g.get("weekly_cap_h") is None:
-            items.append(f"{ind}  {g['name'].upper()}  (rolls up, no cap)")
-            items.append(f"{ind}  today {g['today_h']:.1f}h  ·  7d {d7['actual_h']:.1f}h  ·  "
-                         f"30d {d30['actual_h']:.0f}h")
-            items.append(None)
-            continue
-        wtd = g["wtd"]
-        dot = "● " if wtd["over"] else "  "
-        items.append(f"{ind}{dot}{g['name'].upper()}  cap {g['weekly_cap_h']:.0f}h/wk  {g['monthly_cap_h']:.0f}h/mo")
-        items.append(f"{ind}  {bar(wtd['actual_h'], g['weekly_cap_h'])}  "
-                     f"wtd {wtd['actual_h']:.1f}/{g['weekly_cap_h']:.0f}h   {fmt_period(wtd)}")
+        d = g.get("depth", 0)
+        flush(d)
+        out.append(("group", g["name"], g, d))
+        held = []
+        for m in g.get("direct_engagements") or []:
+            if m in engs and m not in claimed:
+                claimed.add(m)
+                held.append(("engagement", m, engs[m], d + 1))
+        stack.append((d, held))
+    flush(0)
+    for name, eng in engs.items():
+        if name not in claimed:
+            out.append(("engagement", name, eng, 0))
+    return out
+
+
+def _group_lines(g: dict, items: list) -> None:
+    """One group's menu lines. Nested groups (#31) indent by depth; a capless
+    roll-up shows hours only. depth 0 + a cap -> the exact pre-nesting lines."""
+    d7, d30 = g["7d"], g["30d"]
+    ind = "  " * g.get("depth", 0)
+    if g.get("weekly_cap_h") is None:
+        items.append(f"{ind}  {g['name'].upper()}  (rolls up, no cap)")
         items.append(f"{ind}  today {g['today_h']:.1f}h  ·  7d {d7['actual_h']:.1f}h  ·  "
-                     f"30d {d30['actual_h']:.0f}/{g['monthly_cap_h']:.0f}h")
+                     f"30d {d30['actual_h']:.0f}h")
         items.append(None)
-    for name, eng in state.get("engagements", {}).items():
-        wtd, d7, d30 = eng["wtd"], eng["7d"], eng["30d"]
-        if eng.get("income_mode"):
-            # $ meter for the calendar month (#38). With a cap: bar toward the ceiling
-            # + $-left/over. Without: a running total, no bar. Hours stay on the sub-line.
-            mtd = eng["mtd"]
-            rate = eng.get("bill_rate")
-            cap = eng.get("monthly_cap_value")
-            if cap:
-                dot = "● " if mtd.get("over") else "  "
-                items.append(f"{dot}{name}  cap {fmt_dollars(cap)}/mo  ({fmt_dollars(rate)}/hr)")
-                items.append(f"  {bar(mtd['billed'], cap)}  "
-                             f"mtd {fmt_dollars(mtd['billed'])}/{fmt_dollars(cap)}   {fmt_dollars_period(mtd)}")
-            else:
-                items.append(f"  {name}  ({fmt_dollars(rate)}/hr · running meter)")
-                items.append(f"  {fmt_dollars(mtd['billed'])} billed this month")
-            items.append(f"  today {eng['today_h']:.1f}h  ·  7d {d7['actual_h']:.1f}h  ·  "
-                         f"mtd {mtd['actual_h']:.1f}h")
-            items.append(None)
-            continue
-        if eng.get("track_only"):
-            items.append(f"  {name}  (tracked, no cap)")
-            items.append(f"  today {eng['today_h']:.1f}h  ·  7d {d7['actual_h']:.1f}h  ·  "
-                         f"30d {d30['actual_h']:.0f}h")
-            items.append(None)
-            continue
-        dot = "● " if wtd["over"] else "  "
-        items.append(f"{dot}{name}  cap {eng['weekly_cap_h']:.1f}h/wk  {eng['monthly_cap_h']:.0f}h/mo")
-        items.append(f"  {bar(wtd['actual_h'], eng['weekly_cap_h'])}  "
-                     f"wtd {wtd['actual_h']:.1f}/{eng['weekly_cap_h']:.1f}h   {fmt_period(wtd)}")
-        items.append(f"  today {eng['today_h']:.1f}h  ·  7d {d7['actual_h']:.1f}h  ·  "
-                     f"30d {d30['actual_h']:.0f}/{eng['monthly_cap_h']:.0f}h")
+        return
+    wtd = g["wtd"]
+    dot = "● " if wtd["over"] else "  "
+    items.append(f"{ind}{dot}{g['name'].upper()}  cap {g['weekly_cap_h']:.0f}h/wk  {g['monthly_cap_h']:.0f}h/mo")
+    items.append(f"{ind}  {bar(wtd['actual_h'], g['weekly_cap_h'])}  "
+                 f"wtd {wtd['actual_h']:.1f}/{g['weekly_cap_h']:.0f}h   {fmt_period(wtd)}")
+    items.append(f"{ind}  today {g['today_h']:.1f}h  ·  7d {d7['actual_h']:.1f}h  ·  "
+                 f"30d {d30['actual_h']:.0f}/{g['monthly_cap_h']:.0f}h")
+    items.append(None)
+
+
+def _engagement_lines(name: str, eng: dict, depth: int, items: list) -> None:
+    """One engagement's menu lines. `depth` nests a group member one indent stop
+    deeper than its parent (#66); depth 0 -> the exact pre-nesting lines."""
+    ind = "  " * depth
+    wtd, d7, d30 = eng["wtd"], eng["7d"], eng["30d"]
+    if eng.get("income_mode"):
+        # $ meter for the calendar month (#38). With a cap: bar toward the ceiling
+        # + $-left/over. Without: a running total, no bar. Hours stay on the sub-line.
+        mtd = eng["mtd"]
+        rate = eng.get("bill_rate")
+        cap = eng.get("monthly_cap_value")
+        if cap:
+            dot = "● " if mtd.get("over") else "  "
+            items.append(f"{ind}{dot}{name}  cap {fmt_dollars(cap)}/mo  ({fmt_dollars(rate)}/hr)")
+            items.append(f"{ind}  {bar(mtd['billed'], cap)}  "
+                         f"mtd {fmt_dollars(mtd['billed'])}/{fmt_dollars(cap)}   {fmt_dollars_period(mtd)}")
+        else:
+            items.append(f"{ind}  {name}  ({fmt_dollars(rate)}/hr · running meter)")
+            items.append(f"{ind}  {fmt_dollars(mtd['billed'])} billed this month")
+        items.append(f"{ind}  today {eng['today_h']:.1f}h  ·  7d {d7['actual_h']:.1f}h  ·  "
+                     f"mtd {mtd['actual_h']:.1f}h")
         items.append(None)
+        return
+    if eng.get("track_only"):
+        items.append(f"{ind}  {name}  (tracked, no cap)")
+        items.append(f"{ind}  today {eng['today_h']:.1f}h  ·  7d {d7['actual_h']:.1f}h  ·  "
+                     f"30d {d30['actual_h']:.0f}h")
+        items.append(None)
+        return
+    dot = "● " if wtd["over"] else "  "
+    items.append(f"{ind}{dot}{name}  cap {eng['weekly_cap_h']:.1f}h/wk  {eng['monthly_cap_h']:.0f}h/mo")
+    items.append(f"{ind}  {bar(wtd['actual_h'], eng['weekly_cap_h'])}  "
+                 f"wtd {wtd['actual_h']:.1f}/{eng['weekly_cap_h']:.1f}h   {fmt_period(wtd)}")
+    items.append(f"{ind}  today {eng['today_h']:.1f}h  ·  7d {d7['actual_h']:.1f}h  ·  "
+                 f"30d {d30['actual_h']:.0f}/{eng['monthly_cap_h']:.0f}h")
+    items.append(None)
+
+
+def menu_lines(state: dict | None) -> list:
+    """Flat list of text lines; None marks a separator. The rumps frontend wraps
+    each line in a MenuItem; the overlay renders them as label text. Rows come
+    interleaved from iter_rows (#66): each group's member engagements nest inside
+    its subtree instead of a flat tail."""
+    items: list = []
+    if state is None:
+        return ["(snapshot not yet run)"]
+    for kind, name, blk, depth in iter_rows(state):
+        if kind == "group":
+            _group_lines(blk, items)
+        else:
+            _engagement_lines(name, blk, depth, items)
     lb = state.get("live_bucket")
     if lb:
         bp_str = ".".join(lb.get("bucket_path") or ["?"])

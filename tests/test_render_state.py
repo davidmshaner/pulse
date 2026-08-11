@@ -2,6 +2,12 @@ import sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / 'src' / 'pulse'))
 from panel.render_state import build_view_model
 
+
+# The view model emits one ordered `rows` list (#66) — groups and engagements
+# interleaved in render order. These filters recover the old per-kind views.
+def _groups(vm): return [r for r in vm["rows"] if r["is_group"]]
+def _engs(vm): return [r for r in vm["rows"] if not r["is_group"]]
+
 STATE = {
     "generated_at": "2026-06-12T11:25:00-04:00",
     "groups": [
@@ -39,9 +45,9 @@ STATE = {
 
 def test_groups_emitted_with_week_and_month():
     vm = build_view_model(STATE)
-    names = [g["name"] for g in vm["groups"]]
+    names = [g["name"] for g in _groups(vm)]
     assert names == ["Billable", "All Work"]            # definition order preserved
-    bill = vm["groups"][0]
+    bill = _groups(vm)[0]
     assert bill["is_group"] is True
     assert bill["week"]["actual_h"] == 34.9 and bill["week"]["cap_h"] == 32.0
     assert bill["week"]["pct"] == 109 and bill["week"]["status"] == "over"
@@ -51,9 +57,9 @@ def test_groups_emitted_with_week_and_month():
 
 def test_engagements_sorted_capped_over_then_under_then_trackonly():
     vm = build_view_model(STATE)
-    names = [e["name"] for e in vm["engagements"]]
+    names = [e["name"] for e in _engs(vm)]
     assert names == ["Acme", "Globex", "Personal"]      # over, under, then track-only
-    acme = vm["engagements"][0]
+    acme = _engs(vm)[0]
     assert acme["week"]["pct"] == 191 and acme["week"]["status"] == "over"
     assert acme["month"]["actual_h"] == 94.0 and acme["month"]["cap_h"] == 56.0
     assert acme["today_h"] == 2.4 and acme["d7_h"] == 26.0
@@ -63,7 +69,7 @@ def test_row_carries_day_block_track_style():
     # A day has no cap, so every row's `day` block is cap-less (track style),
     # mirroring today_h — regardless of whether the row is capped for the week.
     vm = build_view_model(STATE)
-    acme = [e for e in vm["engagements"] if e["name"] == "Acme"][0]
+    acme = [e for e in _engs(vm) if e["name"] == "Acme"][0]
     assert acme["day"]["actual_h"] == 2.4
     assert acme["day"]["cap_h"] is None
     assert acme["day"]["status"] == "track"
@@ -72,7 +78,7 @@ def test_row_carries_day_block_track_style():
 
 def test_group_carries_day_block():
     vm = build_view_model(STATE)
-    bill = vm["groups"][0]
+    bill = _groups(vm)[0]
     assert bill["day"]["actual_h"] == 4.6            # round(4.56, 1)
     assert bill["day"]["cap_h"] is None
     assert bill["day"]["status"] == "track"
@@ -80,13 +86,13 @@ def test_group_carries_day_block():
 
 def test_day_block_matches_today_h_everywhere():
     vm = build_view_model(STATE)
-    for e in vm["engagements"] + vm["groups"]:
+    for e in _engs(vm) + _groups(vm):
         assert e["day"]["actual_h"] == e["today_h"], e["name"]
 
 
 def test_track_only_row_has_no_cap():
     vm = build_view_model(STATE)
-    p = [e for e in vm["engagements"] if e["name"] == "Personal"][0]
+    p = [e for e in _engs(vm) if e["name"] == "Personal"][0]
     assert p["track_only"] is True
     assert p["week"]["cap_h"] is None and p["week"]["status"] == "track"
     assert p["week"]["actual_h"] == 5.0 and p["month"]["actual_h"] == 20.0
@@ -94,9 +100,9 @@ def test_track_only_row_has_no_cap():
 
 def test_meeting_hours_surfaced_per_engagement():
     vm = build_view_model(STATE)
-    acme = [e for e in vm["engagements"] if e["name"] == "Acme"][0]
+    acme = [e for e in _engs(vm) if e["name"] == "Acme"][0]
     assert acme["meeting_h"] == 3.2
-    globex = [e for e in vm["engagements"] if e["name"] == "Globex"][0]
+    globex = [e for e in _engs(vm) if e["name"] == "Globex"][0]
     assert globex["meeting_h"] == 0.0
 
 
@@ -106,8 +112,8 @@ def test_legacy_total_back_compat():
                         "7d": {"actual_h": 10.0}, "30d": {"actual_h": 40.0}},
               "engagements": {}}
     vm = build_view_model(legacy)
-    assert [g["name"] for g in vm["groups"]] == ["Billable"]
-    assert vm["groups"][0]["week"]["cap_h"] == 32.0
+    assert [g["name"] for g in _groups(vm)] == ["Billable"]
+    assert _groups(vm)[0]["week"]["cap_h"] == 32.0
 
 
 # --- nested groups (issue #31) --------------------------------------------
@@ -134,7 +140,7 @@ NESTED_STATE = {
 
 def test_nested_group_depth_surfaced_when_nonzero():
     vm = build_view_model(NESTED_STATE)
-    by_name = {g["name"]: g for g in vm["groups"]}
+    by_name = {g["name"]: g for g in _groups(vm)}
     assert by_name["Billable"]["depth"] == 1
     assert by_name["Personal Software"]["depth"] == 1
 
@@ -142,20 +148,20 @@ def test_nested_group_depth_surfaced_when_nonzero():
 def test_top_level_group_omits_depth_key():
     # depth 0 must NOT appear in the row — that's what keeps flat configs identical.
     vm = build_view_model(NESTED_STATE)
-    top = [g for g in vm["groups"] if g["name"] == "All Work"][0]
+    top = [g for g in _groups(vm) if g["name"] == "All Work"][0]
     assert "depth" not in top
 
 
 def test_flat_group_view_model_has_no_depth_key():
     # The pre-nesting STATE (no depth in any block) yields rows with no depth key.
     vm = build_view_model(STATE)
-    assert all("depth" not in g for g in vm["groups"])
-    assert all("depth" not in e for e in vm["engagements"])
+    assert all("depth" not in g for g in _groups(vm))
+    assert all("depth" not in e for e in _engs(vm))
 
 
 def test_capless_group_renders_track_style():
     vm = build_view_model(NESTED_STATE)
-    ps = [g for g in vm["groups"] if g["name"] == "Personal Software"][0]
+    ps = [g for g in _groups(vm) if g["name"] == "Personal Software"][0]
     assert ps["track_only"] is True
     assert ps["week"]["cap_h"] is None and ps["week"]["status"] == "track"
     assert ps["week"]["actual_h"] == 4.0 and ps["month"]["actual_h"] == 16.0
@@ -163,7 +169,7 @@ def test_capless_group_renders_track_style():
 
 def test_capped_nested_group_keeps_its_bar():
     vm = build_view_model(NESTED_STATE)
-    bill = [g for g in vm["groups"] if g["name"] == "Billable"][0]
+    bill = [g for g in _groups(vm) if g["name"] == "Billable"][0]
     assert bill["track_only"] is False
     assert bill["week"]["cap_h"] == 20.0 and bill["week"]["pct"] == 90   # 18/20 -> "near"
     assert bill["week"]["status"] == "near"
@@ -256,7 +262,7 @@ INCOME_STATE = {
 
 def test_income_row_month_block_is_dollars_with_cap():
     vm = build_view_model(INCOME_STATE)
-    row = [e for e in vm["engagements"] if e["name"] == "MeterCap"][0]
+    row = [e for e in _engs(vm) if e["name"] == "MeterCap"][0]
     assert row["income_mode"] is True
     assert row["bill_rate"] == 200
     m = row["month"]
@@ -268,7 +274,7 @@ def test_income_row_month_block_is_dollars_with_cap():
 
 def test_income_row_pure_meter_has_no_cap():
     vm = build_view_model(INCOME_STATE)
-    row = [e for e in vm["engagements"] if e["name"] == "MeterOnly"][0]
+    row = [e for e in _engs(vm) if e["name"] == "MeterOnly"][0]
     m = row["month"]
     assert m["income"] is True and m["billed"] == 3000
     assert m["cap_value"] is None and m["status"] == "track" and m["pct"] == 0
@@ -277,7 +283,7 @@ def test_income_row_pure_meter_has_no_cap():
 
 def test_income_row_week_and_day_are_trackstyle_hours():
     vm = build_view_model(INCOME_STATE)
-    row = [e for e in vm["engagements"] if e["name"] == "MeterCap"][0]
+    row = [e for e in _engs(vm) if e["name"] == "MeterCap"][0]
     # No weekly/day $ cap in v1 — those windows stay cap-less hour cells.
     assert row["week"]["cap_h"] is None and row["week"]["actual_h"] == 8.0
     assert row["day"]["cap_h"] is None and row["day"]["actual_h"] == 1.5
@@ -290,7 +296,7 @@ def test_income_row_over_cap_reports_dollars_over():
                                  "today_h": 0.0, "wtd": {"actual_h": 0.0},
                                  "7d": {"actual_h": 0.0}, "30d": {"actual_h": 0.0},
                                  "mtd": {"actual_h": 45.0, "billed": 9000}}}}
-    row = build_view_model(s)["engagements"][0]
+    row = _engs(build_view_model(s))[0]
     m = row["month"]
     assert m["over"] is True and m["dollars_over"] == 1500 and m["status"] == "over"
     assert "dollars_left" not in m
@@ -304,5 +310,101 @@ def test_income_row_barely_over_cap_renders_red():
                                  "today_h": 0.0, "wtd": {"actual_h": 0.0},
                                  "7d": {"actual_h": 0.0}, "30d": {"actual_h": 0.0},
                                  "mtd": {"actual_h": 38.0, "billed": 7600}}}}
-    m = build_view_model(s)["engagements"][0]["month"]
+    m = _engs(build_view_model(s))[0]["month"]
     assert m["over"] is True and m["status"] == "over" and m["dollars_over"] == 100
+
+
+# --- nested engagement rows (issue #66) -----------------------------------
+# Engagement members of a group render inside the group's subtree — after its
+# sub-group subtrees, indented one level deeper than the parent. Engagements in
+# no group keep today's behavior: flat at the end, no depth key.
+
+def _cap_eng(wtd_h, cap, over=False, today=0.0):
+    w = {"actual_h": wtd_h, "over": over}
+    w["hours_over" if over else "hours_left"] = abs(cap - wtd_h)
+    return {"track_only": False, "weekly_cap_h": cap, "monthly_cap_h": cap * 4,
+            "today_h": today, "wtd": w,
+            "7d": {"actual_h": wtd_h}, "30d": {"actual_h": wtd_h}}
+
+
+def _trk_eng(wtd_h=1.0):
+    return {"track_only": True, "weekly_cap_h": None, "monthly_cap_h": None,
+            "today_h": 0.0, "wtd": {"actual_h": wtd_h},
+            "7d": {"actual_h": wtd_h}, "30d": {"actual_h": wtd_h}}
+
+
+INTERLEAVE_STATE = {
+    "groups": [
+        {"name": "All Work", "depth": 0, "weekly_cap_h": 40.0, "monthly_cap_h": 160.0,
+         "today_h": 6.0, "wtd": {"actual_h": 22.0, "hours_left": 18.0, "over": False},
+         "7d": {"actual_h": 23.0}, "30d": {"actual_h": 86.0, "hours_left": 74.0, "over": False},
+         "direct_engagements": ["Solo"]},
+        {"name": "Billable", "depth": 1, "weekly_cap_h": 20.0, "monthly_cap_h": 80.0,
+         "today_h": 3.0, "wtd": {"actual_h": 18.0, "hours_left": 2.0, "over": False},
+         "7d": {"actual_h": 20.0}, "30d": {"actual_h": 70.0, "hours_left": 10.0, "over": False},
+         "direct_engagements": ["ClientA", "ClientB"]},
+        {"name": "Sub", "depth": 2, "track_only": True, "weekly_cap_h": None,
+         "monthly_cap_h": None, "today_h": 0.5,
+         "wtd": {"actual_h": 4.0}, "7d": {"actual_h": 4.5}, "30d": {"actual_h": 16.0},
+         "direct_engagements": ["SubCorp"]},
+        {"name": "Hobby", "depth": 1, "track_only": True, "weekly_cap_h": None,
+         "monthly_cap_h": None, "today_h": 0.0,
+         "wtd": {"actual_h": 2.0}, "7d": {"actual_h": 2.0}, "30d": {"actual_h": 8.0},
+         "direct_engagements": ["ProjX"]},
+    ],
+    "engagements": {
+        "ClientA": _cap_eng(2.0, 8.0),                  # capped, under
+        "ClientB": _cap_eng(9.0, 8.0, over=True),       # capped, over -> sorts first
+        "SubCorp": _trk_eng(4.0),
+        "ProjX":   _trk_eng(2.0),
+        "Solo":    _trk_eng(1.0),
+        "Loose":   _trk_eng(0.5),                       # in no group -> flat tail
+    },
+}
+
+
+def test_member_engagements_interleave_after_parent_subtree():
+    vm = build_view_model(INTERLEAVE_STATE)
+    names = [r["name"] for r in vm["rows"]]
+    assert names == ["All Work", "Billable", "Sub", "SubCorp", "ClientB", "ClientA",
+                     "Hobby", "ProjX", "Solo", "Loose"], names
+
+
+def test_member_engagement_depth_is_parent_plus_one():
+    vm = build_view_model(INTERLEAVE_STATE)
+    by = {r["name"]: r for r in vm["rows"]}
+    assert by["SubCorp"]["depth"] == 3                  # under depth-2 Sub
+    assert by["ClientA"]["depth"] == 2 and by["ClientB"]["depth"] == 2
+    assert by["Solo"]["depth"] == 1
+    assert "depth" not in by["Loose"]                   # unclaimed stays flat
+
+
+def test_sibling_engagements_sorted_over_first_within_group():
+    vm = build_view_model(INTERLEAVE_STATE)
+    names = [r["name"] for r in vm["rows"]]
+    assert names.index("ClientB") < names.index("ClientA")
+
+
+def test_engagement_claimed_once_by_first_tree_order_parent():
+    s = {"groups": [
+            {"name": "A", "depth": 0, "track_only": True, "weekly_cap_h": None,
+             "monthly_cap_h": None, "today_h": 0.0, "wtd": {"actual_h": 1.0},
+             "7d": {"actual_h": 1.0}, "30d": {"actual_h": 1.0},
+             "direct_engagements": ["Shared"]},
+            {"name": "B", "depth": 0, "track_only": True, "weekly_cap_h": None,
+             "monthly_cap_h": None, "today_h": 0.0, "wtd": {"actual_h": 1.0},
+             "7d": {"actual_h": 1.0}, "30d": {"actual_h": 1.0},
+             "direct_engagements": ["Shared"]},
+         ],
+         "engagements": {"Shared": _trk_eng()}}
+    names = [r["name"] for r in build_view_model(s)["rows"]]
+    assert names == ["A", "Shared", "B"]
+
+
+def test_old_state_without_direct_engagements_renders_flat_tail():
+    # An old state.json (pre-#66 snapshot) has no direct_engagements — groups
+    # render in tree order, every engagement flat at the end: today's exact order.
+    vm = build_view_model(STATE)
+    names = [r["name"] for r in vm["rows"]]
+    assert names == ["Billable", "All Work", "Acme", "Globex", "Personal"]
+    assert all("depth" not in r for r in vm["rows"])

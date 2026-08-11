@@ -10,6 +10,8 @@ bar. The `day` block is always cap-less (no daily cap exists), so every row
 renders track-style under the day view."""
 from __future__ import annotations
 
+import frontend_common
+
 
 def _status(pct: float) -> str:
     if pct > 105:
@@ -116,15 +118,42 @@ def _update(state: dict) -> dict | None:
     return {"command": f"cd {repo} && {cmd}" if repo else cmd}
 
 
-def build_view_model(state: dict) -> dict:
-    engagements = [_row(n, e, False) for n, e in state.get("engagements", {}).items()]
-    # capped-over first, then other capped (alpha), then track-only (alpha)
-    engagements.sort(key=lambda x: (x["track_only"], x["week"]["status"] != "over", x["name"]))
+def _sort_sibling_engagements(rows: list) -> list:
+    """Apply the engagement ordering — capped-over first, then other capped
+    (alpha), then track-only (alpha) — per SIBLING SET instead of globally (#66).
+    iter_rows emits each parent's members contiguously (and adjacent sets always
+    differ in depth), so sibling sets are exactly the maximal same-depth runs of
+    engagement rows; group rows pass through in place. A flat config is one big
+    run, i.e. the old global sort."""
+    key = lambda x: (x["track_only"], x["week"]["status"] != "over", x["name"])  # noqa: E731
+    out: list = []
+    run: list = []
 
-    raw_groups = state.get("groups")
-    if raw_groups is None and state.get("total"):           # legacy state.json shape
-        raw_groups = [{**state["total"], "name": "Billable"}]
-    groups = [_row(g["name"], g, True, g.get("depth", 0)) for g in (raw_groups or [])]
+    def flush():
+        run.sort(key=key)
+        out.extend(run)
+        run.clear()
+
+    for row in rows:
+        if row["is_group"]:
+            flush()
+            out.append(row)
+        else:
+            if run and run[-1].get("depth", 0) != row.get("depth", 0):
+                flush()
+            run.append(row)
+    flush()
+    return out
+
+
+def build_view_model(state: dict) -> dict:
+    # One interleaved row list (#66): the shared iter_rows walk nests each
+    # group's member engagements inside its subtree; the template renders
+    # VM.rows top to bottom.
+    rows = _sort_sibling_engagements([
+        _row(name, blk, kind == "group", depth)
+        for kind, name, blk, depth in frontend_common.iter_rows(state)
+    ])
 
     now = None
     lb = state.get("live_bucket")
@@ -135,8 +164,7 @@ def build_view_model(state: dict) -> dict:
     return {
         "generated_at": state.get("generated_at"),
         "repo_path": state.get("repo_path", ""),
-        "groups": groups,
-        "engagements": engagements,
+        "rows": rows,
         "now": now,
         "uncategorized": state.get("needs_llm", {"sessions": 0, "meetings": 0}),
         "overhead_sessions": state.get("overhead_sessions", 0),
