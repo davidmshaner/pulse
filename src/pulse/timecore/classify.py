@@ -31,10 +31,37 @@ def _is_catchall(src):
     return str(Path(src.rstrip("/")).expanduser()) in CATCHALL_GLOBAL_DIRS
 
 
+# Git-worktree conventions (#69): harness repos run parallel work in worktrees
+# that mirror the repo layout, so '<repo>/<marker>/<name>/<sub>' is the same
+# logical location as '<repo>/<sub>'. '/.claude/worktrees/' is the Claude Code
+# convention; '/.worktrees/' is the bare convention Pulse itself uses.
+_WORKTREE_MARKERS = ("/.claude/worktrees/", "/.worktrees/")
+
+
+def strip_worktree_segments(fp):
+    """Collapse every '<repo>/<marker>/<worktree-name>/' segment to '<repo>/',
+    so a file touched in a worktree matches the claims of its canonical repo
+    location — sub-bucket claims, exclusions, and the catch-all guard all see
+    the normalized path. A path with no worktree segment returns unchanged; a
+    path ending AT the worktree name maps to the repo root."""
+    for marker in _WORKTREE_MARKERS:
+        while True:
+            i = fp.find(marker)
+            if i < 0:
+                break
+            rest = fp[i + len(marker):]
+            j = rest.find("/")
+            if j < 0:                      # nothing below the worktree name
+                fp = fp[:i]
+                break
+            fp = fp[:i] + "/" + rest[j + 1:]
+    return fp
+
+
 def match_file_to_bucket(filepath, flat_buckets_sorted, excluded_paths):
     if not filepath or not filepath.startswith("/"):
         return None
-    fp = filepath.rstrip("/")
+    fp = strip_worktree_segments(filepath.rstrip("/"))
     for ex in excluded_paths:
         if fp == ex or fp.startswith(ex + "/"):
             return None

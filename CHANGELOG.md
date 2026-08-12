@@ -6,6 +6,11 @@ All notable changes to Pulse are documented here. Format follows
 
 ## [Unreleased]
 ### Changed
+- Worktree-path normalization in the classifier: file evidence gathered inside a
+  repo's git worktrees (`<repo>/.claude/worktrees/<name>/<sub>` or
+  `<repo>/.worktrees/<name>/<sub>`) now matches the claims of its canonical repo
+  location, so agent/dev sessions running in worktrees inherit sub-bucket claims
+  (and exclusions) instead of falling back to the parent bucket (#69)
 - Engagement rows now nest inside their group's card section: each group's direct
   member engagements render indented one level deeper than the group (after its
   sub-group subtrees), in both the panel and the menu-bar text fallback, so the

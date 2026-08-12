@@ -59,3 +59,56 @@ def test_needs_llm_when_nothing_matches():
     s = _sess(encoded="-elsewhere", reads={"/nowhere/x": 1})
     b, reason, scores = classify_session(s, FLAT, EXCLUDED, LDE)
     assert (b, reason, scores) == (None, "needs_llm", {})
+
+
+# --- worktree-path normalization (#69) -------------------------------------
+# Work done inside a repo's git worktrees (<repo>/.claude/worktrees/<name>/<sub>
+# or <repo>/.worktrees/<name>/<sub>) mirrors the repo layout, but strict prefix
+# matching never saw the claimed subfolder. The matcher now collapses the
+# worktree segment before matching, so sub-bucket claims apply in worktrees.
+
+from classify import match_file_to_bucket, strip_worktree_segments  # noqa: E402
+
+
+def test_strip_claude_worktree_segment():
+    assert strip_worktree_segments("/w/alpha/.claude/worktrees/issue-9/deep/x.py") \
+        == "/w/alpha/deep/x.py"
+
+
+def test_strip_bare_worktree_segment():
+    assert strip_worktree_segments("/w/alpha/.worktrees/issue-9/deep/x.py") \
+        == "/w/alpha/deep/x.py"
+
+
+def test_strip_is_noop_without_worktree_segment():
+    assert strip_worktree_segments("/w/alpha/deep/x.py") == "/w/alpha/deep/x.py"
+    assert strip_worktree_segments("/w/alpha/worktrees/x.py") == "/w/alpha/worktrees/x.py"
+
+
+def test_strip_path_ending_at_worktree_name_maps_to_repo_root():
+    assert strip_worktree_segments("/w/alpha/.claude/worktrees/issue-9") == "/w/alpha"
+
+
+def test_worktree_file_matches_sub_bucket_claim():
+    b = match_file_to_bucket("/w/alpha/.claude/worktrees/issue-9/deep/x.py", FLAT, EXCLUDED)
+    assert b == ("alpha", "deep")
+
+
+def test_bare_worktree_file_matches_sub_bucket_claim():
+    b = match_file_to_bucket("/w/alpha/.worktrees/issue-9/deep/x.py", FLAT, EXCLUDED)
+    assert b == ("alpha", "deep")
+
+
+def test_worktree_file_respects_exclusions():
+    # exclusions see the NORMALIZED path, so a worktree copy of an excluded
+    # dir is still excluded.
+    b = match_file_to_bucket("/w/scratch/.claude/worktrees/wt/notes.md", FLAT, EXCLUDED)
+    assert b is None
+
+
+def test_session_file_evidence_through_worktree_counts_to_sub_bucket():
+    s = _sess(encoded="-w-alpha",
+              edits={"/w/alpha/.claude/worktrees/issue-9/deep/x.py": 3})
+    b, reason, scores = classify_session(s, FLAT, EXCLUDED, LDE)
+    assert b == ["alpha", "deep"]
+    assert reason == "file_evidence"
