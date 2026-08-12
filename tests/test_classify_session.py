@@ -146,3 +146,58 @@ def test_worktree_scoped_exclusion_still_applies_to_raw_path():
     b = match_file_to_bucket("/w/alpha/.worktrees/scratch/notes.md", FLAT,
                              ["/w/alpha/.worktrees/scratch"])
     assert b is None
+
+
+# --- raw-cwd launch-dir cascade (#71) --------------------------------------
+# Sessions now carry the raw cwd (scan cache v3). The launch-dir tiers prefer
+# it over the lossy dash-encoded form: real-path prefix matching, worktree
+# segments normalized (#69), with `encoded` kept as the legacy fallback.
+
+def _sess_cwd(cwd, encoded=""):
+    return {"encoded": encoded, "cwd": cwd, "edit_paths": {}, "read_paths": {}}
+
+
+def test_cwd_in_worktree_classifies_to_sub_bucket():
+    s = _sess_cwd("/w/alpha/.claude/worktrees/issue-9/deep")
+    b, reason, _ = classify_session(s, FLAT, EXCLUDED, LDE)
+    assert b == ["alpha", "deep"]
+    assert reason == "project_dir_prefix"
+
+
+def test_cwd_outside_worktree_matches_like_encoded():
+    s = _sess_cwd("/w/alpha/deep")
+    b, reason, _ = classify_session(s, FLAT, EXCLUDED, LDE)
+    assert b == ["alpha", "deep"] and reason == "project_dir_prefix"
+
+
+def test_cwd_sibling_name_prefix_does_not_misresolve():
+    # The encoded form is lossy ('/x/beta-archive' encodes with the same dashes
+    # as '/x/beta-...'); raw-path matching must reject the sibling.
+    s = _sess_cwd("/w/beta-archive")
+    b, reason, _ = classify_session(s, FLAT, EXCLUDED, LDE)
+    assert b is None and reason == "needs_llm"
+
+
+def test_cwd_excluded_inside_worktree():
+    s = _sess_cwd("/w/scratch/.claude/worktrees/wt/sub")
+    b, reason, _ = classify_session(s, FLAT, EXCLUDED, LDE)
+    assert b is None and reason == "excluded"
+
+
+def test_missing_cwd_falls_back_to_encoded():
+    s = _sess(encoded="-w-alpha-deep")
+    b, reason, _ = classify_session(s, FLAT, EXCLUDED, LDE)
+    assert b == ["alpha", "deep"] and reason == "project_dir_prefix"
+
+
+def test_launch_dir_exact_matches_normalized_cwd():
+    from classify import classify_session_by_launch_dir_exact
+    s = _sess_cwd("/w/umbrella/.claude/worktrees/wt-1")
+    assert classify_session_by_launch_dir_exact(s, LDE) == ["beta"]
+
+
+def test_launch_dir_exact_stays_exact_for_cwd():
+    from classify import classify_session_by_launch_dir_exact
+    # a SUBDIR of the mapped root must not inherit the exact mapping
+    s = _sess_cwd("/w/umbrella/subdir")
+    assert classify_session_by_launch_dir_exact(s, LDE) is None

@@ -188,3 +188,41 @@ def test_window_slide_reaggregates_from_cache(tmp_path):
 def test_default_cache_path_is_beside_out(tmp_path):
     out = tmp_path / ".cache" / "sessions.json"
     assert scan_sessions.default_cache_path(out) == tmp_path / ".cache" / "scan_cache.json"
+
+
+# --- raw cwd extraction (#71) ----------------------------------------------
+# The launch-dir cascade needs the real cwd (the encoded dir name is lossy and
+# can't have worktree segments stripped). extract_session captures the first
+# cwd seen pre-window; aggregate_session passes it through; CACHE_VERSION is
+# bumped so stale IRs (no cwd) re-parse instead of silently missing the field.
+
+def test_extract_captures_first_cwd(tmp_path):
+    base = datetime(2026, 8, 10, 9, 0, 0)
+    entries = _session_entries(base)
+    entries[0]["cwd"] = "/tmp/proj/.claude/worktrees/wt-1/sub"
+    entries[1]["cwd"] = "/tmp/proj/elsewhere"
+    p = _write_session(tmp_path / "enc" / "s1.jsonl", entries)
+    ir = scan_sessions.extract_session(p)
+    assert ir["cwd"] == "/tmp/proj/.claude/worktrees/wt-1/sub"
+
+
+def test_extract_cwd_none_when_absent(tmp_path):
+    base = datetime(2026, 8, 10, 9, 0, 0)
+    p = _write_session(tmp_path / "enc" / "s2.jsonl", _session_entries(base))
+    assert scan_sessions.extract_session(p)["cwd"] is None
+
+
+def test_aggregate_passes_cwd_through(tmp_path):
+    base = datetime(2026, 8, 10, 9, 0, 0)
+    entries = _session_entries(base)
+    entries[0]["cwd"] = "/tmp/proj"
+    p = _write_session(tmp_path / "enc" / "s3.jsonl", entries)
+    ir = scan_sessions.extract_session(p)
+    out = scan_sessions.aggregate_session(p, ir, base - timedelta(hours=1), base + timedelta(hours=1))
+    assert out["cwd"] == "/tmp/proj"
+
+
+def test_cache_version_bumped_for_cwd_field():
+    # v2 IRs have no cwd; reusing them would silently disable the raw-cwd
+    # cascade for every cached session. The version bump forces a re-parse.
+    assert scan_sessions.CACHE_VERSION >= 3

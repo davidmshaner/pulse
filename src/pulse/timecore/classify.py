@@ -159,6 +159,24 @@ def encoded_matches(encoded, source_path):
 
 
 def classify_session_by_project_dir(sess, flat_buckets_sorted, excluded_paths):
+    """Launch-dir prefix tier. When the session carries the raw `cwd` (scan
+    cache v3, #71) it is matched as a real path — worktree segments normalized
+    (#69), both raw and normalized legs like the file matcher, and no lossy
+    dash-encoding (so '/x/beta-archive' can't land on '/x/beta'). Sessions
+    without a cwd (old caches, old sessions.json) keep the encoded fallback."""
+    cwd = (sess.get("cwd") or "").rstrip("/")
+    if cwd:
+        norm = strip_worktree_segments(cwd)
+        for ex in excluded_paths:
+            ex_n = ex.rstrip("/")
+            if _prefix_match(cwd, ex_n) or _prefix_match(norm, ex_n):
+                return None, "excluded"
+        for b in flat_buckets_sorted:
+            for src in b["source_paths"]:
+                src_n = src.rstrip("/")
+                if _prefix_match(cwd, src_n) or _prefix_match(norm, src_n):
+                    return list(b["path"]), "project_dir_prefix"
+        return None, "unknown"
     encoded = sess.get("encoded", "")
     for ex in excluded_paths:
         if encoded_matches(encoded, ex):
@@ -190,7 +208,11 @@ def classify_session_by_launch_dir_exact(sess, launch_dir_exact):
     enc = lambda p: (
         p.replace("/", "-").replace("_", "-").replace(".", "-").lstrip("-")
     )
-    e = enc(sess.get("encoded", ""))
+    # Prefer the raw cwd (#71): normalize worktree segments first, so a session
+    # launched at <root>/.claude/worktrees/<name> exact-matches the <root>
+    # mapping. Still EXACT after normalization — subdirs must not inherit.
+    cwd = (sess.get("cwd") or "").rstrip("/")
+    e = enc(strip_worktree_segments(cwd)) if cwd else enc(sess.get("encoded", ""))
     for path, bucket in launch_dir_exact.items():
         if e == enc(path.rstrip("/")):
             return [bucket] if isinstance(bucket, str) else list(bucket)

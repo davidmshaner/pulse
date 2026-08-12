@@ -26,7 +26,7 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
-CACHE_VERSION = 2  # bump to invalidate every cached extract when the IR shape changes
+CACHE_VERSION = 3  # bump to invalidate every cached extract when the IR shape changes (v3: +cwd, #71)
 
 
 def iso_to_dt(s):
@@ -63,6 +63,7 @@ def extract_session(filepath):
     """
     first_type = None
     first_seen = False
+    cwd = None
     entries = []
     try:
         with open(filepath, "r") as f:
@@ -77,6 +78,11 @@ def extract_session(filepath):
                 if not first_seen:
                     first_type = e.get("type")   # first parseable line, pre-window (drives category)
                     first_seen = True
+                if cwd is None and e.get("cwd"):
+                    # First cwd seen, pre-window (#71): the raw launch dir the
+                    # encoded parent-dir name lossily encodes — the launch-dir
+                    # cascade needs the real path to strip worktree segments.
+                    cwd = e["cwd"]
                 ts = iso_to_dt(e.get("timestamp"))
                 if ts is None:
                     continue
@@ -129,7 +135,7 @@ def extract_session(filepath):
                 entries.append(rec)
     except Exception:
         return None
-    return {"first_type": first_type, "entries": entries}
+    return {"first_type": first_type, "cwd": cwd, "entries": entries}
 
 
 def aggregate_session(filepath, extracted, window_start, window_end):
@@ -198,6 +204,7 @@ def aggregate_session(filepath, extracted, window_start, window_end):
     return {
         "filepath": str(filepath),
         "encoded": filepath.parent.name,
+        "cwd": extracted.get("cwd"),
         "category": category,
         "edit_paths": dict(edit_paths),
         "read_paths": dict(read_paths),
