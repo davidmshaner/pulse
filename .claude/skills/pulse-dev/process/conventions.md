@@ -12,7 +12,10 @@
 - **Running tests in a `.worktrees/issue-<n>` worktree:** the worktree has no `.venv` and none of the
   gitignored user data, so use the main checkout's venv and symlink the data files in once:
   ```bash
-  for f in config.yaml appetite.yaml; do ln -s ../../$f $f; done   # gitignored; never committed
+  # gitignored user data; never committed. session-overrides.yaml matters too —
+  # without it, #64 manual overrides silently stop applying and a QA snapshot
+  # miscounts needs_llm (looks like a regression that isn't; learned on #71).
+  for f in config.yaml appetite.yaml session-overrides.yaml; do ln -s ../../$f $f; done
   ../../.venv/bin/python3 -m pytest -q
   ```
 - **Run (foreground)** for a quick look: `python3 src/pulse/app.py` (Ctrl-C to stop).
