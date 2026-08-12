@@ -4,7 +4,8 @@ Synthetic registry only (public repo): no real client names or paths.
 """
 import sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / 'src' / 'pulse' / 'timecore'))
-from classify import walk_registry, classify_session
+from classify import (walk_registry, classify_session, match_file_to_bucket,
+                      strip_worktree_segments)
 
 REG = {
     "buckets": [
@@ -67,8 +68,6 @@ def test_needs_llm_when_nothing_matches():
 # matching never saw the claimed subfolder. The matcher now collapses the
 # worktree segment before matching, so sub-bucket claims apply in worktrees.
 
-from classify import match_file_to_bucket, strip_worktree_segments  # noqa: E402
-
 
 def test_strip_claude_worktree_segment():
     assert strip_worktree_segments("/w/alpha/.claude/worktrees/issue-9/deep/x.py") \
@@ -112,3 +111,38 @@ def test_session_file_evidence_through_worktree_counts_to_sub_bucket():
     b, reason, scores = classify_session(s, FLAT, EXCLUDED, LDE)
     assert b == ["alpha", "deep"]
     assert reason == "file_evidence"
+
+
+def test_strip_leaves_home_level_worktrees_alone():
+    # ~/.claude/worktrees is user-level tooling state, not a repo worktree —
+    # grafting it onto $HOME would prefix-match unrelated buckets.
+    import pathlib
+    home = str(pathlib.Path.home())
+    fp = home + "/.claude/worktrees/pulse-fix/dev/x.py"
+    assert strip_worktree_segments(fp) == fp
+
+
+def test_strip_normalizes_to_fixpoint_when_collapse_splices_a_marker():
+    # Pathological nesting where removing one segment splices a new marker
+    # into the path — normalization must not stop half-way.
+    out = strip_worktree_segments("/repo/.claude/.worktrees/wt/worktrees/deep/x.py")
+    assert "/.worktrees/" not in out and "/.claude/worktrees/" not in out
+
+
+def test_worktree_scoped_claim_still_matches_raw_path():
+    # A registry claim that deliberately targets a path INSIDE a worktree
+    # (the pre-#69 workaround shape) keeps working via the raw-path leg.
+    reg = {"buckets": [
+        {"name": "alpha", "source_path": "/w/alpha",
+         "children": [{"name": "wtclient",
+                       "source_path": "/w/alpha/.worktrees/client-x"}]},
+    ]}
+    flat = sorted(walk_registry(reg["buckets"]), key=lambda b: -b["depth"])
+    b = match_file_to_bucket("/w/alpha/.worktrees/client-x/src/a.py", flat, [])
+    assert b == ("alpha", "wtclient")
+
+
+def test_worktree_scoped_exclusion_still_applies_to_raw_path():
+    b = match_file_to_bucket("/w/alpha/.worktrees/scratch/notes.md", FLAT,
+                             ["/w/alpha/.worktrees/scratch"])
+    assert b is None
