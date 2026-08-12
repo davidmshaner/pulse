@@ -4,7 +4,8 @@ Synthetic registry only (public repo): no real client names or paths.
 """
 import sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / 'src' / 'pulse' / 'timecore'))
-from classify import walk_registry, classify_session
+from classify import (walk_registry, classify_session, match_file_to_bucket,
+                      strip_worktree_segments)
 
 REG = {
     "buckets": [
@@ -59,3 +60,89 @@ def test_needs_llm_when_nothing_matches():
     s = _sess(encoded="-elsewhere", reads={"/nowhere/x": 1})
     b, reason, scores = classify_session(s, FLAT, EXCLUDED, LDE)
     assert (b, reason, scores) == (None, "needs_llm", {})
+
+
+# --- worktree-path normalization (#69) -------------------------------------
+# Work done inside a repo's git worktrees (<repo>/.claude/worktrees/<name>/<sub>
+# or <repo>/.worktrees/<name>/<sub>) mirrors the repo layout, but strict prefix
+# matching never saw the claimed subfolder. The matcher now collapses the
+# worktree segment before matching, so sub-bucket claims apply in worktrees.
+
+
+def test_strip_claude_worktree_segment():
+    assert strip_worktree_segments("/w/alpha/.claude/worktrees/issue-9/deep/x.py") \
+        == "/w/alpha/deep/x.py"
+
+
+def test_strip_bare_worktree_segment():
+    assert strip_worktree_segments("/w/alpha/.worktrees/issue-9/deep/x.py") \
+        == "/w/alpha/deep/x.py"
+
+
+def test_strip_is_noop_without_worktree_segment():
+    assert strip_worktree_segments("/w/alpha/deep/x.py") == "/w/alpha/deep/x.py"
+    assert strip_worktree_segments("/w/alpha/worktrees/x.py") == "/w/alpha/worktrees/x.py"
+
+
+def test_strip_path_ending_at_worktree_name_maps_to_repo_root():
+    assert strip_worktree_segments("/w/alpha/.claude/worktrees/issue-9") == "/w/alpha"
+
+
+def test_worktree_file_matches_sub_bucket_claim():
+    b = match_file_to_bucket("/w/alpha/.claude/worktrees/issue-9/deep/x.py", FLAT, EXCLUDED)
+    assert b == ("alpha", "deep")
+
+
+def test_bare_worktree_file_matches_sub_bucket_claim():
+    b = match_file_to_bucket("/w/alpha/.worktrees/issue-9/deep/x.py", FLAT, EXCLUDED)
+    assert b == ("alpha", "deep")
+
+
+def test_worktree_file_respects_exclusions():
+    # exclusions see the NORMALIZED path, so a worktree copy of an excluded
+    # dir is still excluded.
+    b = match_file_to_bucket("/w/scratch/.claude/worktrees/wt/notes.md", FLAT, EXCLUDED)
+    assert b is None
+
+
+def test_session_file_evidence_through_worktree_counts_to_sub_bucket():
+    s = _sess(encoded="-w-alpha",
+              edits={"/w/alpha/.claude/worktrees/issue-9/deep/x.py": 3})
+    b, reason, scores = classify_session(s, FLAT, EXCLUDED, LDE)
+    assert b == ["alpha", "deep"]
+    assert reason == "file_evidence"
+
+
+def test_strip_leaves_home_level_worktrees_alone():
+    # ~/.claude/worktrees is user-level tooling state, not a repo worktree —
+    # grafting it onto $HOME would prefix-match unrelated buckets.
+    import pathlib
+    home = str(pathlib.Path.home())
+    fp = home + "/.claude/worktrees/pulse-fix/dev/x.py"
+    assert strip_worktree_segments(fp) == fp
+
+
+def test_strip_normalizes_to_fixpoint_when_collapse_splices_a_marker():
+    # Pathological nesting where removing one segment splices a new marker
+    # into the path — normalization must not stop half-way.
+    out = strip_worktree_segments("/repo/.claude/.worktrees/wt/worktrees/deep/x.py")
+    assert "/.worktrees/" not in out and "/.claude/worktrees/" not in out
+
+
+def test_worktree_scoped_claim_still_matches_raw_path():
+    # A registry claim that deliberately targets a path INSIDE a worktree
+    # (the pre-#69 workaround shape) keeps working via the raw-path leg.
+    reg = {"buckets": [
+        {"name": "alpha", "source_path": "/w/alpha",
+         "children": [{"name": "wtclient",
+                       "source_path": "/w/alpha/.worktrees/client-x"}]},
+    ]}
+    flat = sorted(walk_registry(reg["buckets"]), key=lambda b: -b["depth"])
+    b = match_file_to_bucket("/w/alpha/.worktrees/client-x/src/a.py", flat, [])
+    assert b == ("alpha", "wtclient")
+
+
+def test_worktree_scoped_exclusion_still_applies_to_raw_path():
+    b = match_file_to_bucket("/w/alpha/.worktrees/scratch/notes.md", FLAT,
+                             ["/w/alpha/.worktrees/scratch"])
+    assert b is None

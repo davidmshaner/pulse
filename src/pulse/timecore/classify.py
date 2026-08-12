@@ -1,6 +1,7 @@
 """classify.py — pure bucket-classification primitives. A session's own
 auto-memory dir is resolved via Path.home() (portable across machines), not a
 hardcoded absolute path."""
+import re
 from collections import defaultdict
 from pathlib import Path
 
@@ -31,19 +32,55 @@ def _is_catchall(src):
     return str(Path(src.rstrip("/")).expanduser()) in CATCHALL_GLOBAL_DIRS
 
 
+# Git-worktree conventions (#69): harness repos run parallel work in worktrees
+# that mirror the repo layout, so '<repo>/<marker>/<name>/<sub>' is the same
+# logical location as '<repo>/<sub>'. '/.claude/worktrees/' is the Claude Code
+# convention; '/.worktrees/' is the bare convention Pulse itself uses.
+_WORKTREE_RE = re.compile(r"/(?:\.claude/worktrees|\.worktrees)/[^/]+")
+
+
+def strip_worktree_segments(fp):
+    """Collapse every '<repo>/<marker>/<worktree-name>' segment to '<repo>', so
+    a file touched in a worktree matches the claims of its canonical repo
+    location. Substituted to a fixpoint, so a collapse that splices a new
+    marker into the path still fully normalizes. A segment sitting DIRECTLY
+    under $HOME is left alone — '~/.claude/worktrees/...' is user-level tooling
+    state, not a repo worktree, and grafting it onto $HOME would prefix-match
+    unrelated registry buckets. A path with no worktree segment returns
+    unchanged; a path ending AT the worktree name maps to the repo root."""
+    home = str(Path.home())
+    while True:
+        def _repl(m, _fp=fp):
+            return m.group(0) if _fp[:m.start()] == home else ""
+        new = _WORKTREE_RE.sub(_repl, fp)
+        if new == fp:
+            return new
+        fp = new
+
+
+def _prefix_match(fp, base):
+    return fp == base or fp.startswith(base + "/")
+
+
 def match_file_to_bucket(filepath, flat_buckets_sorted, excluded_paths):
+    """Registry claims and exclusions are matched against BOTH the raw path and
+    its worktree-normalized form (#69): the normalized leg gives canonical
+    claims reach into worktree copies; the raw leg keeps a claim or exclusion
+    that deliberately targets a path INSIDE a worktree working as written."""
     if not filepath or not filepath.startswith("/"):
         return None
-    fp = filepath.rstrip("/")
+    raw = filepath.rstrip("/")
+    norm = strip_worktree_segments(raw)
     for ex in excluded_paths:
-        if fp == ex or fp.startswith(ex + "/"):
+        ex_n = ex.rstrip("/")
+        if _prefix_match(raw, ex_n) or _prefix_match(norm, ex_n):
             return None
     for b in flat_buckets_sorted:
         for src in b["source_paths"]:
             src_n = src.rstrip("/")
             if _is_catchall(src_n):
                 continue
-            if fp == src_n or fp.startswith(src_n + "/"):
+            if _prefix_match(raw, src_n) or _prefix_match(norm, src_n):
                 return tuple(b["path"])
     return None
 
