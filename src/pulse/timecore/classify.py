@@ -59,30 +59,38 @@ def strip_worktree_segments(fp):
 
 
 def _prefix_match(fp, base):
-    return fp == base or fp.startswith(base + "/")
+    # bool(base): a blank claim/exclusion (stray '' in config) must be inert,
+    # not match every absolute path via startswith("/").
+    return bool(base) and (fp == base or fp.startswith(base + "/"))
 
 
-def match_file_to_bucket(filepath, flat_buckets_sorted, excluded_paths):
-    """Registry claims and exclusions are matched against BOTH the raw path and
-    its worktree-normalized form (#69): the normalized leg gives canonical
-    claims reach into worktree copies; the raw leg keeps a claim or exclusion
-    that deliberately targets a path INSIDE a worktree working as written."""
-    if not filepath or not filepath.startswith("/"):
-        return None
-    raw = filepath.rstrip("/")
-    norm = strip_worktree_segments(raw)
+def _match_raw_path(raw, norm, flat_buckets_sorted, excluded_paths):
+    """The shared two-leg matcher (#69/#71): claims and exclusions are checked
+    against BOTH the raw path and its worktree-normalized form — the normalized
+    leg gives canonical claims reach into worktree copies; the raw leg keeps a
+    claim or exclusion that deliberately targets a path INSIDE a worktree
+    working as written. Returns (bucket_path_tuple|None, excluded)."""
     for ex in excluded_paths:
         ex_n = ex.rstrip("/")
         if _prefix_match(raw, ex_n) or _prefix_match(norm, ex_n):
-            return None
+            return None, True
     for b in flat_buckets_sorted:
         for src in b["source_paths"]:
             src_n = src.rstrip("/")
             if _is_catchall(src_n):
                 continue
             if _prefix_match(raw, src_n) or _prefix_match(norm, src_n):
-                return tuple(b["path"])
-    return None
+                return tuple(b["path"]), False
+    return None, False
+
+
+def match_file_to_bucket(filepath, flat_buckets_sorted, excluded_paths):
+    if not filepath or not filepath.startswith("/"):
+        return None
+    raw = filepath.rstrip("/")
+    bucket, _excluded = _match_raw_path(raw, strip_worktree_segments(raw),
+                                        flat_buckets_sorted, excluded_paths)
+    return bucket
 
 
 def catchall_claims(flat_buckets):
@@ -166,16 +174,16 @@ def classify_session_by_project_dir(sess, flat_buckets_sorted, excluded_paths):
     without a cwd (old caches, old sessions.json) keep the encoded fallback."""
     cwd = (sess.get("cwd") or "").rstrip("/")
     if cwd:
-        norm = strip_worktree_segments(cwd)
-        for ex in excluded_paths:
-            ex_n = ex.rstrip("/")
-            if _prefix_match(cwd, ex_n) or _prefix_match(norm, ex_n):
-                return None, "excluded"
-        for b in flat_buckets_sorted:
-            for src in b["source_paths"]:
-                src_n = src.rstrip("/")
-                if _prefix_match(cwd, src_n) or _prefix_match(norm, src_n):
-                    return list(b["path"]), "project_dir_prefix"
+        bucket, excluded = _match_raw_path(cwd, strip_worktree_segments(cwd),
+                                           flat_buckets_sorted, excluded_paths)
+        if excluded:
+            return None, "excluded"
+        if bucket:
+            return list(bucket), "project_dir_prefix"
+        # Deliberately NO encoded retry: the lossy fallback is the bug class
+        # this tier replaces (a registry path spelled differently from disk
+        # surfaces as needs_llm/RESOLVE instead of silently landing on a
+        # dash-collision bucket).
         return None, "unknown"
     encoded = sess.get("encoded", "")
     for ex in excluded_paths:
@@ -208,11 +216,22 @@ def classify_session_by_launch_dir_exact(sess, launch_dir_exact):
     enc = lambda p: (
         p.replace("/", "-").replace("_", "-").replace(".", "-").lstrip("-")
     )
-    # Prefer the raw cwd (#71): normalize worktree segments first, so a session
-    # launched at <root>/.claude/worktrees/<name> exact-matches the <root>
-    # mapping. Still EXACT after normalization — subdirs must not inherit.
+    # Prefer the raw cwd (#71): real-path EXACT comparison, two legs — raw (so
+    # a rule deliberately keyed on a worktree path itself keeps matching) and
+    # worktree-normalized (so a session launched at <root>/.claude/worktrees/
+    # <name> matches the <root> mapping). No dash-encoding on this side: enc()
+    # is lossy ('/', '_', '.' collapse) and belongs only to the encoded-name
+    # fallback below, where the '_'-preservation rationale actually applies.
+    # Still EXACT — subdirs must not inherit.
     cwd = (sess.get("cwd") or "").rstrip("/")
-    e = enc(strip_worktree_segments(cwd)) if cwd else enc(sess.get("encoded", ""))
+    if cwd:
+        norm = strip_worktree_segments(cwd)
+        for path, bucket in launch_dir_exact.items():
+            p = path.rstrip("/")
+            if p and (cwd == p or norm == p):
+                return [bucket] if isinstance(bucket, str) else list(bucket)
+        return None
+    e = enc(sess.get("encoded", ""))
     for path, bucket in launch_dir_exact.items():
         if e == enc(path.rstrip("/")):
             return [bucket] if isinstance(bucket, str) else list(bucket)

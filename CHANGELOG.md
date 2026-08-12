@@ -11,7 +11,7 @@ All notable changes to Pulse are documented here. Format follows
   sessions with no file evidence classify to their canonical repo location (#69's
   other half), and real-path matching replaces the lossy dash-encoded form for
   sessions that carry a cwd (a sibling dir like `x-archive` can no longer land on
-  bucket `x`). Sessions without a cwd keep the encoded fallback (#71)
+  bucket `x`). Sessions without a cwd keep the encoded fallback; the menu-bar live-bucket detector and the golden-corpus replay ride the same raw-cwd path (#71)
 - Worktree-path normalization in the classifier: file evidence gathered inside a
   repo's git worktrees (`<repo>/.claude/worktrees/<name>/<sub>` or
   `<repo>/.worktrees/<name>/<sub>`) now matches the claims of its canonical repo

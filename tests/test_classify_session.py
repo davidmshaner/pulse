@@ -201,3 +201,31 @@ def test_launch_dir_exact_stays_exact_for_cwd():
     # a SUBDIR of the mapped root must not inherit the exact mapping
     s = _sess_cwd("/w/umbrella/subdir")
     assert classify_session_by_launch_dir_exact(s, LDE) is None
+
+
+# --- #72 review fixes -------------------------------------------------------
+
+def test_blank_exclusion_entry_is_inert():
+    # A stray '' in excluded_paths must not exclude every session (raw-path
+    # prefix matching would otherwise match "" + "/" against any abs path).
+    s = _sess_cwd("/w/alpha/deep")
+    b, reason, _ = classify_session(s, FLAT, ["", "/w/scratch"], LDE)
+    assert b == ["alpha", "deep"] and reason == "project_dir_prefix"
+    assert match_file_to_bucket("/w/alpha/deep/x.py", FLAT, [""]) == ("alpha", "deep")
+
+
+def test_launch_dir_exact_worktree_keyed_rule_matches_raw_cwd():
+    # A rule deliberately keyed on a worktree path itself (pre-#69 workaround
+    # shape) keeps matching via the raw leg.
+    from classify import classify_session_by_launch_dir_exact
+    lde = {"/w/root/.claude/worktrees/client-x": ["clientx"]}
+    s = _sess_cwd("/w/root/.claude/worktrees/client-x")
+    assert classify_session_by_launch_dir_exact(s, lde) == ["clientx"]
+
+
+def test_launch_dir_exact_raw_path_not_dash_lossy():
+    # cwd '/w/um-brella' must NOT match a rule written for '/w/um/brella'
+    # (the dash-encoded forms collide; real-path comparison rejects it).
+    from classify import classify_session_by_launch_dir_exact
+    s = _sess_cwd("/w/um-brella")
+    assert classify_session_by_launch_dir_exact(s, {"/w/um/brella": ["b"]}) is None

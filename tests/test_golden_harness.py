@@ -198,3 +198,32 @@ def test_deterministic_false_fails_when_cascade_assigns(tmp_path):
     mm = G.compute_mismatches(g, flat, exc, lde, valid)
     assert len(mm) == 1 and mm[0]["kind"] == "confirmed"
     assert mm[0]["got"] == ["alpha"]
+
+
+# --- cwd rides the corpus (#71/#72) ----------------------------------------
+
+def test_replay_entry_passes_cwd_through():
+    # Replay must walk the SAME cascade branch as live classification (#58
+    # contract): a cwd-carrying entry takes the raw-cwd branch on replay too.
+    from golden import replay_entry
+    from classify import walk_registry
+    flat = sorted(walk_registry({"buckets": [
+        {"name": "alpha", "source_path": "/w/alpha",
+         "children": [{"name": "deep", "source_path": "/w/alpha/deep"}]},
+    ]}["buckets"]), key=lambda b: -b["depth"])
+    entry = {"evidence": {"encoded": "-w-alpha",
+                          "cwd": "/w/alpha/.claude/worktrees/wt/deep",
+                          "edit_paths": {}, "read_paths": {}}}
+    got, reason, _ = replay_entry(entry, flat, [], {})
+    assert got == ["alpha", "deep"] and reason == "project_dir_prefix"
+
+
+def test_replay_entry_without_cwd_uses_encoded_branch():
+    from golden import replay_entry
+    from classify import walk_registry
+    flat = sorted(walk_registry({"buckets": [
+        {"name": "alpha", "source_path": "/w/alpha"},
+    ]}["buckets"]), key=lambda b: -b["depth"])
+    entry = {"evidence": {"encoded": "-w-alpha", "edit_paths": {}, "read_paths": {}}}
+    got, reason, _ = replay_entry(entry, flat, [], {})
+    assert got == ["alpha"] and reason == "project_dir_prefix"

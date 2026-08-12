@@ -55,8 +55,9 @@ def extract_session(filepath):
     This is the cacheable half of the old ``parse_session``: it does the expensive
     read + json.loads and pre-extracts each entry's evidence, but applies NO window
     (the window moves every run and is applied cheaply in ``aggregate_session``).
-    Returns ``{"first_type", "entries": [...]}`` or ``None`` if the file is
-    unreadable/gone (caller drops it — same as the old parse returning None).
+    Returns ``{"first_type", "cwd", "entries": [...]}`` or ``None`` if the file
+    is unreadable/gone (caller drops it — same as the old parse returning None).
+    ``cwd`` (#71, cache v3) is the first non-sidechain cwd seen, pre-window.
 
     Text and bash commands are truncated to the same [:500]/[:300] bounds the old
     parser used, so nothing beyond what sessions.json already holds is cached (#8).
@@ -78,10 +79,12 @@ def extract_session(filepath):
                 if not first_seen:
                     first_type = e.get("type")   # first parseable line, pre-window (drives category)
                     first_seen = True
-                if cwd is None and e.get("cwd"):
-                    # First cwd seen, pre-window (#71): the raw launch dir the
-                    # encoded parent-dir name lossily encodes — the launch-dir
-                    # cascade needs the real path to strip worktree segments.
+                if cwd is None and e.get("cwd") and not e.get("isSidechain"):
+                    # First non-sidechain cwd seen, pre-window (#71): the raw
+                    # launch dir the encoded parent-dir name lossily encodes —
+                    # the launch-dir cascade needs the real path to strip
+                    # worktree segments. Sidechain (subagent) entries can
+                    # record a different directory; skip them.
                     cwd = e["cwd"]
                 ts = iso_to_dt(e.get("timestamp"))
                 if ts is None:

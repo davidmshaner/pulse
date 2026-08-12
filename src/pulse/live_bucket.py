@@ -58,13 +58,34 @@ def find_recent_jsonl(window_min: int = DEFAULT_WINDOW_MIN) -> Path | None:
     return best
 
 
-def resolve_bucket(encoded: str) -> list[str] | None:
-    """Map an encoded project_dir (the JSONL parent dir name) to a bucket path."""
+def read_session_cwd(jsonl: Path, max_lines: int = 20) -> str | None:
+    """First non-sidechain cwd in the session JSONL head (#71) — the raw launch
+    dir the encoded parent-dir name lossily encodes. Fail-silent: any read/parse
+    problem returns None and the caller falls back to encoded matching."""
+    try:
+        with open(jsonl) as f:
+            for i, line in enumerate(f):
+                if i >= max_lines:
+                    break
+                try:
+                    e = json.loads(line)
+                except Exception:
+                    continue
+                if e.get("cwd") and not e.get("isSidechain"):
+                    return e["cwd"]
+    except Exception:
+        return None
+    return None
+
+
+def resolve_bucket(encoded: str, cwd: str | None = None) -> list[str] | None:
+    """Map a session's launch dir to a bucket path. Prefers the raw cwd (#71:
+    real-path matching, worktree-normalized) over the lossy encoded dir name."""
     with open(REGISTRY) as f:
         registry = yaml.safe_load(f)
     flat = sorted(walk_registry(registry["buckets"]), key=lambda b: -b["depth"])
     excluded = registry.get("exclude_paths") or []
-    sess = {"encoded": encoded}
+    sess = {"encoded": encoded, "cwd": cwd}
     bp, _ = classify_session_by_project_dir(sess, flat, excluded)
     if bp is None:
         return None
@@ -76,7 +97,7 @@ def detect(window_min: int = DEFAULT_WINDOW_MIN) -> dict | None:
     if jsonl is None:
         return None
     encoded = jsonl.parent.name
-    bp = resolve_bucket(encoded)
+    bp = resolve_bucket(encoded, cwd=read_session_cwd(jsonl))
     minutes_ago = (time.time() - jsonl.stat().st_mtime) / 60
     return {
         "bucket_path": bp,

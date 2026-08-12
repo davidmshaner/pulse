@@ -70,7 +70,12 @@ def load_inputs(registry_path, rules_path):
 
 def replay_entry(entry, flat, excluded, lde):
     ev = entry.get("evidence") or {}
+    # cwd rides along (#71) so replay walks the SAME cascade branch live
+    # classification took — the #58 replay-identity contract. Pre-#71 entries
+    # have no cwd and correctly replay the legacy encoded branch they were
+    # seeded from.
     sess = {"encoded": ev.get("encoded", ""),
+            "cwd": ev.get("cwd"),
             "edit_paths": ev.get("edit_paths") or {},
             "read_paths": ev.get("read_paths") or {}}
     return classify_session(sess, flat, excluded, lde)
@@ -128,6 +133,7 @@ def seed(prematch_path, golden_path):
             "expected_bucket": list(s["bucket_path"]) if s.get("bucket_path") else None,
             "evidence": {
                 "encoded": s.get("encoded", ""),
+                "cwd": s.get("cwd"),
                 "edit_paths": s.get("edit_paths") or {},
                 "read_paths": s.get("read_paths") or {},
             },
